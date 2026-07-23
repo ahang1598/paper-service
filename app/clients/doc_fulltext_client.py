@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-文档全文接口（doc_fulltext）Python 客户端。
+文档全文接口（doc_fulltext）客户端。
 
 接口功能：
     - 提供文档全文信息；
@@ -18,9 +18,11 @@
     - 按 `chunk_id` 从小到大排序后，将所有 `content` 拼接为完整文本输出。
 
 设计说明：
-    - 常量（路径、超时、轮询参数、响应状态等）集中定义在模块顶部 / 配置类中；
+    - 常量（路径、超时、轮询参数、响应状态等）集中定义在模块顶部；
     - 可配置项（host、密钥、设备信息、文件 id 等）通过 dataclass 显式声明，便于后续演进与扩展；
     - 网络层与业务层分离，异常分类捕获，便于定位与重试。
+    - 本模块为纯客户端，可被上层服务（FastAPI handler）通过依赖注入使用，
+      也可独立调用（见模块末尾 main 示例）。
 """
 
 from __future__ import annotations
@@ -28,7 +30,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import logging
 import time
 import uuid
@@ -72,6 +73,7 @@ FIELD_MESSAGE = "message"
 FIELD_CONTENT = "content"
 FIELD_METADATA = "metadata"
 FIELD_CHUNK_ID = "chunk_id"
+FIELD_TOTAL_CHUNKS = "total_chunks"
 
 # 子字段（device 信息）
 DEVICE_FIELD_APP_VERSION = "x-app-version"
@@ -98,11 +100,7 @@ DEFAULT_POLL_MAX_TIMES = 30        # 解析中(pending)最大轮询次数
 DEFAULT_POLL_INTERVAL_SEC = 2.0    # pending 轮询间隔（秒）
 
 # ---- 日志配置 ----
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-)
-logger = logging.getLogger("doc_fulltext")
+logger = logging.getLogger("doc_fulltext.client")
 
 
 # =====================================================================
@@ -121,7 +119,7 @@ class ServiceConfig:
     host: str = "10.34.236.1"
     port: int = 9983
     scheme: str = "http"
-    # HMAC 鉴权密钥（Base64 或明文），由服务方分配，请勿硬编码到代码库
+    # HMAC 鉴权密钥（明文或 Base64），由服务方分配，请勿硬编码到代码库
     auth_key: str = "xxxx"
 
     @property
@@ -150,10 +148,15 @@ class DeviceInfo:
 
 @dataclass
 class DocFullTextRequest:
-    """doc_fulltext 请求参数（对应 proto DocFullTextRequest）。"""
-    file_id: str
-    device: DeviceInfo
-    request_id: str = field(default_factory=lambda: f"req_{int(time.time())}_{uuid.uuid4().hex[:8]}")
+    """doc_fulltext 请求参数（对应 proto DocFullTextRequest）。
+
+    file_id 与 doc_hash 二选一；同时传以 file_id 为准（服务侧行为）。
+    """
+    file_id: str = ""
+    device: DeviceInfo = field(default_factory=DeviceInfo)
+    request_id: str = field(
+        default_factory=lambda: f"req_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    )
     doc_hash: Optional[str] = None
     splitter: SplitterType = SplitterType.SMALL_CHUNK
     pages: list[int] = field(default_factory=list)  # 空列表表示获取所有页
@@ -285,6 +288,7 @@ class DocFullTextClient:
 
     # ---------- 鉴权 ----------
     def _build_headers(self, device_id: str) -> dict[str, str]:
+        """每次请求重新生成 timestamp/token（保证不超时容差且便于重签名）。"""
         timestamp_ms = _now_timestamp_ms()
         token = generate_auth_token(
             method=HTTP_METHOD_POST,
@@ -337,6 +341,11 @@ class DocFullTextClient:
         # 重试耗尽
         raise RequestError(f"请求失败，已重试 {self.max_retries} 次: {last_exc}")
 
+    # ---------- 公开别名（供上层 handler / 流式逻辑复用，保持私有实现不变） ----------
+    def post_once(self, request: DocFullTextRequest) -> dict[str, Any]:
+        """单次请求（含网络层重试）的公开入口。"""
+        return self._post_once(request)
+
     # ---------- 业务层响应校验 ----------
     @staticmethod
     def _check_response(body: dict[str, Any]) -> None:
@@ -346,7 +355,12 @@ class DocFullTextClient:
             description = body.get(FIELD_DESCRIPTION, "unknown")
             raise BusinessError(f"接口返回失败 code={code}, description={description}")
 
-    # ---------- 对外主方法 ----------
+    @staticmethod
+    def check_response(body: dict[str, Any]) -> None:
+        """响应校验公开入口（供上层复用）。"""
+        DocFullTextClient._check_response(body)
+
+    # ---------- 对外主方法（一次性返回完整拼接结果） ----------
     def fetch_full_text(self, request: DocFullTextRequest) -> str:
         """
         获取文档全文完整内容。
@@ -357,6 +371,23 @@ class DocFullTextClient:
 
         Returns:
             完整拼接后的 content 文本。
+        """
+        data, _ = self.fetch_full_text_with_status(request)
+        # fetch_full_text_with_status 在 success 时已保证 data 非空
+        return assemble_full_content(data)
+
+    # ---------- 对外主方法（返回原始 data，供上层 handler 获取完整结构） ----------
+    def fetch_full_text_with_status(
+        self, request: DocFullTextRequest
+    ) -> tuple[list[dict[str, Any]], str]:
+        """
+        获取文档全文，返回 (data, status)。
+
+        - success：返回非空 data 与 "success"；
+        - fail / 参数错误 / 网络异常：抛出对应异常；
+        - pending 轮询超时：抛出 DocPendingTimeout。
+
+        供上层流式 handler 复用同一套轮询逻辑，逐次产出 progress 事件。
         """
         for poll_index in range(1, self.poll_max_times + 1):
             body = self._post_once(request)
@@ -372,8 +403,10 @@ class DocFullTextClient:
                 data = body.get(FIELD_DATA) or []
                 if not data:
                     # status=success 但 data 为空，视为异常
-                    raise BusinessError(f"status=success 但 data 为空: {body.get(FIELD_DESCRIPTION, '')}")
-                return assemble_full_content(data)
+                    raise BusinessError(
+                        f"status=success 但 data 为空: {body.get(FIELD_DESCRIPTION, '')}"
+                    )
+                return data, STATUS_SUCCESS
 
             if status == STATUS_FAIL:
                 raise BusinessError(f"文档解析失败: {body.get(FIELD_DESCRIPTION, 'fail')}")
@@ -392,11 +425,11 @@ class DocFullTextClient:
 
 
 # =====================================================================
-# 入口示例
+# 独立运行入口示例
 # =====================================================================
 
-def main() -> None:
-    """使用示例：构造请求并输出完整 content。"""
+def _main() -> None:
+    """独立调用示例：构造请求并输出完整 content。"""
 
     # 1) 服务配置（生产环境建议改为从配置中心 / 环境变量读取）
     service_config = ServiceConfig(
@@ -448,4 +481,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    _main()

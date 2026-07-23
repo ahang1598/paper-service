@@ -1,0 +1,10 @@
+# 本项目已改用 uv + pyproject.toml 管理依赖，此文件仅作向后兼容保留。
+# 请勿在此维护依赖，统一在 pyproject.toml 的 [project].dependencies 维护。
+#
+# 安装方式：
+#   uv sync                    # 安装运行期依赖（创建 .venv）
+#   uv sync --extra dev        # 额外安装测试依赖
+#   uv run pytest              # 运行测试
+#
+# 如需生成等价 requirements.txt（仅兼容旧工具链）：
+#   uv export --no-dev -o requirements.txt
