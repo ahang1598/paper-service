@@ -1,0 +1,451 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+文档全文接口（doc_fulltext）Python 客户端。
+
+接口功能：
+    - 提供文档全文信息；
+    - 支持对文档内图片、表格进行 OCR 识别并输出成文本；
+    - 支持指定切分方式：大块（CHAPTER）/ 小块（SMALL_CHUNK）。
+
+鉴权方式：
+    - HMAC-SHA256 + Base64。
+    - 签名串：`{method}&{url_path}&deviceId={device_id}&timestamp={timestamp}`
+    - 签名密钥由服务方分配，放在请求头 `token` 中；时间戳放在请求头 `timestamp` 中。
+
+结果处理：
+    - 响应 `data` 为多个 chunk，每个 chunk 含 `content` 与 `metadata.chunk_id`；
+    - 按 `chunk_id` 从小到大排序后，将所有 `content` 拼接为完整文本输出。
+
+设计说明：
+    - 常量（路径、超时、轮询参数、响应状态等）集中定义在模块顶部 / 配置类中；
+    - 可配置项（host、密钥、设备信息、文件 id 等）通过 dataclass 显式声明，便于后续演进与扩展；
+    - 网络层与业务层分离，异常分类捕获，便于定位与重试。
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any, Optional
+
+import requests
+
+# =====================================================================
+# 常量定义区（与可变变量区分，集中维护，便于后续演进）
+# =====================================================================
+
+# ---- HTTP / 接口路径常量 ----
+HTTP_METHOD_POST = "POST"
+URL_PATH_DOC_FULLTEXT = "/copilot_for_docs/doc_fulltext"
+
+# ---- 请求头常量 ----
+HEADER_CONTENT_TYPE = "Content-Type"
+HEADER_TIMESTAMP = "timestamp"
+HEADER_TOKEN = "token"
+CONTENT_TYPE_JSON = "application/json"
+
+# ---- 鉴权 / 时间戳常量 ----
+# 服务端允许的时间戳误差（毫秒），来源：limitMilliSecond = 600000
+AUTH_TIMESTAMP_TOLERANCE_MS = 600_000
+
+# ---- 业务字段名常量 ----
+FIELD_REQUEST_ID = "request_id"
+FIELD_FILE_ID = "file_id"
+FIELD_DOC_HASH = "doc_hash"
+FIELD_DEVICE = "device"
+FIELD_SPLITTER = "splitter"
+FIELD_PAGES = "pages"
+FIELD_WITH_RECT = "with_rect"
+FIELD_CODE = "code"
+FIELD_DESCRIPTION = "description"
+FIELD_DATA = "data"
+FIELD_STATUS = "status"
+FIELD_MESSAGE = "message"
+FIELD_CONTENT = "content"
+FIELD_METADATA = "metadata"
+FIELD_CHUNK_ID = "chunk_id"
+
+# 子字段（device 信息）
+DEVICE_FIELD_APP_VERSION = "x-app-version"
+DEVICE_FIELD_DEVICE_ID = "x-device-id"
+DEVICE_FIELD_DEVICE_MODEL = "x-device-model"
+DEVICE_FIELD_DEVICE_TYPE = "x-device-type"
+DEVICE_FIELD_PRD_PKG_NAME = "x-prd-pkg-name"
+
+# ---- 响应状态码常量 ----
+RESP_CODE_SUCCESS = 0
+RESP_CODE_FAIL = 1
+
+# ---- 响应 status 文本常量 ----
+STATUS_SUCCESS = "success"
+STATUS_PENDING = "pending"
+STATUS_FAIL = "fail"
+
+# ---- 默认请求 / 轮询参数 ----
+DEFAULT_CONNECT_TIMEOUT_SEC = 5
+DEFAULT_READ_TIMEOUT_SEC = 30
+DEFAULT_MAX_RETRIES = 3            # 网络异常最大重试次数
+DEFAULT_RETRY_BACKOFF_SEC = 1.0    # 重试退避基数（秒）
+DEFAULT_POLL_MAX_TIMES = 30        # 解析中(pending)最大轮询次数
+DEFAULT_POLL_INTERVAL_SEC = 2.0    # pending 轮询间隔（秒）
+
+# ---- 日志配置 ----
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+)
+logger = logging.getLogger("doc_fulltext")
+
+
+# =====================================================================
+# 枚举 / 数据类定义区（可变配置项，与常量区分）
+# =====================================================================
+
+class SplitterType(IntEnum):
+    """文档切分方式（对应 proto 中的 SplitterType 枚举）。"""
+    CHAPTER = 0       # 大块：15000 长，无 overlap
+    SMALL_CHUNK = 1   # 小块：500 长，20 overlap
+
+
+@dataclass
+class ServiceConfig:
+    """服务端连接配置（可按环境覆盖）。"""
+    host: str = "10.34.236.1"
+    port: int = 9983
+    scheme: str = "http"
+    # HMAC 鉴权密钥（Base64 或明文），由服务方分配，请勿硬编码到代码库
+    auth_key: str = "xxxx"
+
+    @property
+    def base_url(self) -> str:
+        return f"{self.scheme}://{self.host}:{self.port}"
+
+
+@dataclass
+class DeviceInfo:
+    """设备信息（对应 proto KcDeviceInfo，使用业务侧实际字段名）。"""
+    app_version: str = "12.1.8.410"
+    device_id: str = "pmq"
+    device_model: str = "ALN-AL00"
+    device_type: str = "phone"
+    prd_pkg_name: str = "com.huawei.vassistant"
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            DEVICE_FIELD_APP_VERSION: self.app_version,
+            DEVICE_FIELD_DEVICE_ID: self.device_id,
+            DEVICE_FIELD_DEVICE_MODEL: self.device_model,
+            DEVICE_FIELD_DEVICE_TYPE: self.device_type,
+            DEVICE_FIELD_PRD_PKG_NAME: self.prd_pkg_name,
+        }
+
+
+@dataclass
+class DocFullTextRequest:
+    """doc_fulltext 请求参数（对应 proto DocFullTextRequest）。"""
+    file_id: str
+    device: DeviceInfo
+    request_id: str = field(default_factory=lambda: f"req_{int(time.time())}_{uuid.uuid4().hex[:8]}")
+    doc_hash: Optional[str] = None
+    splitter: SplitterType = SplitterType.SMALL_CHUNK
+    pages: list[int] = field(default_factory=list)  # 空列表表示获取所有页
+    with_rect: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            FIELD_REQUEST_ID: self.request_id,
+            FIELD_FILE_ID: self.file_id,
+            FIELD_DEVICE: self.device.to_dict(),
+            FIELD_SPLITTER: int(self.splitter),
+            FIELD_PAGES: list(self.pages),
+            FIELD_WITH_RECT: self.with_rect,
+        }
+        if self.doc_hash:
+            payload[FIELD_DOC_HASH] = self.doc_hash
+        return payload
+
+
+# =====================================================================
+# 自定义异常区
+# =====================================================================
+
+class DocFullTextError(Exception):
+    """接口异常基类。"""
+
+
+class AuthError(DocFullTextError):
+    """鉴权相关异常。"""
+
+
+class RequestError(DocFullTextError):
+    """网络 / HTTP 层异常。"""
+
+
+class ResponseParseError(DocFullTextError):
+    """响应解析异常（JSON 非法、结构不符合预期等）。"""
+
+
+class BusinessError(DocFullTextError):
+    """业务异常（code != 0 或 status 为 fail 等）。"""
+
+
+class DocPendingTimeout(DocFullTextError):
+    """文档一直处于 pending，轮询超时。"""
+
+
+# =====================================================================
+# 工具函数区
+# =====================================================================
+
+def _now_timestamp_ms() -> int:
+    """当前时间戳（毫秒）。"""
+    return int(time.time() * 1000)
+
+
+def generate_auth_token(
+    method: str,
+    url_path: str,
+    device_id: str,
+    timestamp_ms: int,
+    auth_key: str,
+) -> str:
+    """
+    生成鉴权 token。
+
+    签名串格式与服务端 CheckSignKgs 一致：
+        `{method}&{url_path}&deviceId={device_id}&timestamp={timestamp_ms}`
+    使用 HMAC-SHA256 计算后做 Base64 编码。
+    """
+    if not auth_key:
+        raise AuthError("auth_key 未配置，无法生成 token")
+
+    sign_str = f"{method}&{url_path}&deviceId={device_id}&timestamp={timestamp_ms}"
+    digest = hmac.new(
+        key=auth_key.encode("utf-8"),
+        msg=sign_str.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).digest()
+    return base64.b64encode(digest).decode("utf-8")
+
+
+def assemble_full_content(data: list[dict[str, Any]]) -> str:
+    """
+    将响应 data 中多个 content 按 metadata.chunk_id 从小到大排序后拼接。
+
+    - data 为空时返回空串；
+    - 缺失 chunk_id 的元素按 +∞ 排在最后，保证结果稳定；
+    - chunk_id 相同则保持原相对顺序（稳定排序）。
+    """
+    if not data:
+        return ""
+
+    def _chunk_id_sort_key(item: dict[str, Any]) -> tuple[int, float]:
+        metadata = item.get(FIELD_METADATA) or {}
+        chunk_id = metadata.get(FIELD_CHUNK_ID)
+        # 缺失 chunk_id 时排在最后
+        return (0, chunk_id) if isinstance(chunk_id, (int, float)) else (1, float("inf"))
+
+    sorted_data = sorted(data, key=_chunk_id_sort_key)
+    return "".join(item.get(FIELD_CONTENT, "") for item in sorted_data)
+
+
+# =====================================================================
+# 客户端实现区
+# =====================================================================
+
+class DocFullTextClient:
+    """doc_fulltext 接口客户端。"""
+
+    def __init__(
+        self,
+        service_config: ServiceConfig,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT_SEC,
+        read_timeout: float = DEFAULT_READ_TIMEOUT_SEC,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_backoff_sec: float = DEFAULT_RETRY_BACKOFF_SEC,
+        poll_max_times: int = DEFAULT_POLL_MAX_TIMES,
+        poll_interval_sec: float = DEFAULT_POLL_INTERVAL_SEC,
+    ) -> None:
+        self.config = service_config
+        self.connect_timeout = connect_timeout
+        self.read_timeout = read_timeout
+        self.max_retries = max_retries
+        self.retry_backoff_sec = retry_backoff_sec
+        self.poll_max_times = poll_max_times
+        self.poll_interval_sec = poll_interval_sec
+        self._session = requests.Session()
+
+    # ---------- 鉴权 ----------
+    def _build_headers(self, device_id: str) -> dict[str, str]:
+        timestamp_ms = _now_timestamp_ms()
+        token = generate_auth_token(
+            method=HTTP_METHOD_POST,
+            url_path=URL_PATH_DOC_FULLTEXT,
+            device_id=device_id,
+            timestamp_ms=timestamp_ms,
+            auth_key=self.config.auth_key,
+        )
+        return {
+            HEADER_CONTENT_TYPE: CONTENT_TYPE_JSON,
+            HEADER_TIMESTAMP: str(timestamp_ms),
+            HEADER_TOKEN: token,
+        }
+
+    # ---------- 单次请求（含网络层重试） ----------
+    def _post_once(self, request: DocFullTextRequest) -> dict[str, Any]:
+        url = f"{self.config.base_url}{URL_PATH_DOC_FULLTEXT}"
+        headers = self._build_headers(device_id=request.device.device_id)
+        payload = request.to_dict()
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.debug("POST %s attempt=%d", url, attempt)
+                resp = self._session.post(
+                    url=url,
+                    headers=headers,
+                    json=payload,
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
+            except requests.RequestException as exc:
+                last_exc = exc
+                logger.warning("网络异常 attempt=%d/%d: %s", attempt, self.max_retries, exc)
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff_sec * attempt)
+                continue
+
+            # HTTP 状态码层校验
+            if resp.status_code != 200:
+                raise RequestError(
+                    f"HTTP {resp.status_code}: {resp.text[:200]}"
+                )
+
+            # 解析 JSON
+            try:
+                return resp.json()
+            except ValueError as exc:
+                raise ResponseParseError(f"响应非合法 JSON: {exc}; body={resp.text[:200]}") from exc
+
+        # 重试耗尽
+        raise RequestError(f"请求失败，已重试 {self.max_retries} 次: {last_exc}")
+
+    # ---------- 业务层响应校验 ----------
+    @staticmethod
+    def _check_response(body: dict[str, Any]) -> None:
+        """校验响应：code 非法、参数错误等直接抛业务异常。"""
+        code = body.get(FIELD_CODE)
+        if code != RESP_CODE_SUCCESS:
+            description = body.get(FIELD_DESCRIPTION, "unknown")
+            raise BusinessError(f"接口返回失败 code={code}, description={description}")
+
+    # ---------- 对外主方法 ----------
+    def fetch_full_text(self, request: DocFullTextRequest) -> str:
+        """
+        获取文档全文完整内容。
+
+        - 自动处理 pending（解析中）状态：按 poll_interval_sec 轮询，直到 success/fail 或超时；
+        - 解析失败 / 参数错误 / 网络异常均抛出对应异常；
+        - 成功后按 chunk_id 排序拼接 content 返回。
+
+        Returns:
+            完整拼接后的 content 文本。
+        """
+        for poll_index in range(1, self.poll_max_times + 1):
+            body = self._post_once(request)
+            self._check_response(body)
+
+            status = body.get(FIELD_STATUS)
+            logger.info(
+                "轮询第 %d/%d 次，status=%s, request_id=%s",
+                poll_index, self.poll_max_times, status, body.get(FIELD_REQUEST_ID),
+            )
+
+            if status == STATUS_SUCCESS:
+                data = body.get(FIELD_DATA) or []
+                if not data:
+                    # status=success 但 data 为空，视为异常
+                    raise BusinessError(f"status=success 但 data 为空: {body.get(FIELD_DESCRIPTION, '')}")
+                return assemble_full_content(data)
+
+            if status == STATUS_FAIL:
+                raise BusinessError(f"文档解析失败: {body.get(FIELD_DESCRIPTION, 'fail')}")
+
+            if status == STATUS_PENDING:
+                if poll_index < self.poll_max_times:
+                    time.sleep(self.poll_interval_sec)
+                continue
+
+            # 未知 status
+            raise BusinessError(f"未知的响应 status={status}, body={body}")
+
+        raise DocPendingTimeout(
+            f"文档解析持续 pending，已轮询 {self.poll_max_times} 次仍无结果"
+        )
+
+
+# =====================================================================
+# 入口示例
+# =====================================================================
+
+def main() -> None:
+    """使用示例：构造请求并输出完整 content。"""
+
+    # 1) 服务配置（生产环境建议改为从配置中心 / 环境变量读取）
+    service_config = ServiceConfig(
+        host="10.34.236.1",
+        port=9983,
+        scheme="http",
+        auth_key="xxxx",  # TODO: 替换为服务方分配的真实密钥
+    )
+
+    # 2) 设备信息
+    device = DeviceInfo(
+        app_version="12.1.8.410",
+        device_id="pmq",
+        device_model="ALN-AL00",
+        device_type="phone",
+        prd_pkg_name="com.huawei.vassistant",
+    )
+
+    # 3) 构造请求参数
+    request = DocFullTextRequest(
+        file_id="1db8f80c0b854613aa68d2c977891353.docx",
+        device=device,
+        request_id="pmq_20250427_03",
+        splitter=SplitterType.SMALL_CHUNK,
+        pages=[],            # 获取所有页
+        with_rect=False,
+    )
+
+    client = DocFullTextClient(service_config)
+
+    # 4) 调用并处理异常
+    try:
+        full_content = client.fetch_full_text(request)
+        print("====== 完整 content ======")
+        print(full_content)
+        print("====== 长度: %d ======" % len(full_content))
+    except AuthError as e:
+        logger.error("鉴权失败: %s", e)
+    except RequestError as e:
+        logger.error("请求失败: %s", e)
+    except ResponseParseError as e:
+        logger.error("响应解析失败: %s", e)
+    except BusinessError as e:
+        logger.error("业务异常: %s", e)
+    except DocPendingTimeout as e:
+        logger.error("解析超时: %s", e)
+    except DocFullTextError as e:
+        logger.error("其他接口异常: %s", e)
+
+
+if __name__ == "__main__":
+    main()
