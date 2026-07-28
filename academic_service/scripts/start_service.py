@@ -37,11 +37,14 @@ from pathlib import Path
 
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 12135
-APP_MODULE = "app.main:app"
+# 应用统一以 academic_service.app.* 为包根导入，故 uvicorn 加载的模块需带包前缀；
+# 同时必须把项目父目录加入 PYTHONPATH（见 start_uvicorn），否则报
+# "ModuleNotFoundError: No module named 'academic_service'"。
+APP_MODULE = "academic_service.app.main:app"
 HEALTH_PATH = "/health"
 
 # 关键运行期包（import 失败说明 .venv 不完整，需要 uv sync）
-REQUIRED_IMPORTS = ["fastapi", "uvicorn", "pydantic_settings", "requests"]
+REQUIRED_IMPORTS = ["fastapi", "uvicorn", "pydantic_settings", "requests", "yaml"]
 
 # 健康检查轮询参数
 HEALTH_CHECK_TIMEOUT = 20   # 总等待秒数
@@ -87,8 +90,33 @@ def ensure_uv_on_path() -> None:
 
 
 def project_root() -> Path:
-    """脚本所在目录即项目根。"""
-    return Path(__file__).resolve().parent
+    """项目根（含 pyproject.toml 的目录，即 academic_service/）。
+
+    从脚本位置向上查找 pyproject.toml，使脚本可放在 scripts/ 等子目录中。
+    """
+    here = Path(__file__).resolve().parent
+    for candidate in (here, *here.parents):
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    # 兜底：脚本所在目录的上一级（兼容直接放在根目录的旧布局）
+    return here.parent
+
+
+def project_parent() -> Path:
+    """项目父目录（academic_service 的上一级，即 paper-service/）。
+
+    应用以 ``academic_service.app.*`` 为包根导入，需把此目录加入 sys.path，
+    ``academic_service`` 才能作为（命名空间）包被导入。
+    """
+    return project_root().parent
+
+
+def _script_relpath() -> str:
+    """脚本相对项目根的路径（如 scripts/start_service.py），用于提示信息。"""
+    try:
+        return str(Path(__file__).resolve().relative_to(project_root()))
+    except ValueError:
+        return Path(__file__).name
 
 
 def venv_python(root: Path) -> Path:
@@ -305,6 +333,16 @@ def start_uvicorn(root: Path, host: str, port: int) -> tuple[int, Path]:
         sys.exit(1)
 
     log_file = open(log_path, "ab", buffering=0)
+
+    # 让 academic_service 作为包可被导入：把项目父目录加入 PYTHONPATH。
+    # cwd 仍保持项目根（academic_service/），保证 .env 与 configs/ 的相对解析正确。
+    env = os.environ.copy()
+    parent = project_parent()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in [str(parent), existing_pythonpath] if p
+    )
+
     proc = subprocess.Popen(
         [
             str(uvicorn_bin), APP_MODULE,
@@ -312,6 +350,7 @@ def start_uvicorn(root: Path, host: str, port: int) -> tuple[int, Path]:
             "--port", str(port),
         ],
         cwd=str(root),
+        env=env,
         stdout=log_file,
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
@@ -397,7 +436,7 @@ def main() -> int:
         print(f"  进程 PID: {pid}")
         print()
         print("提示：服务在后台运行。停止服务可用:")
-        print(f"  python3 {Path(__file__).name} --port {args.port}  # 再次运行会先关闭旧服务")
+        print(f"  python3 {_script_relpath()} --port {args.port}  # 再次运行会先关闭旧服务")
         print(f"  或 kill {pid}")
         return 0
     else:
