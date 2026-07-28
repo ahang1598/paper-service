@@ -61,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # 导入 services 包以触发 @register 装饰器（确保 handler 注册到 registry）
     import academic_service.app.services.document.fulltext_handler  # noqa: F401
+    import academic_service.app.services.search.docid_search_handler  # noqa: F401
 
     application = FastAPI(
         title="paper-service",

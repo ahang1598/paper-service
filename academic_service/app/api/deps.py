@@ -16,6 +16,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request, status
 
 from academic_service.app.clients.doc_fulltext_client import DeviceInfo, DocFullTextClient, ServiceConfig
+from academic_service.app.clients.docid_search_client import DocidSearchClient, DocidSearchConfig
 from academic_service.app.config import Settings, get_settings
 from academic_service.app.core.exceptions import (
     ActionNotFoundError,
@@ -98,3 +99,19 @@ def make_default_device(settings: Settings) -> DeviceInfo:
         device_type=settings.default_device_type,
         prd_pkg_name=settings.default_device_prd_pkg_name,
     )
+
+
+def make_docid_search_client_factory(settings: Settings):
+    """构造 docid 搜索 client 工厂闭包（按 settings 创建 DocidSearchClient）。
+
+    测试可通过 app.dependency_overrides 替换。
+    """
+
+    def _factory() -> DocidSearchClient:
+        config = DocidSearchConfig(
+            url=settings.docid_search_url,
+            auth_key=settings.docid_search_auth_key,
+        )
+        return DocidSearchClient(config=config)
+
+    return _factory

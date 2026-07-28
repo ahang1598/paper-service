@@ -204,16 +204,61 @@ def fake_client_factory(fake_client: FakeDocClient) -> Callable[[], Any]:
 
 
 # =====================================================================
+# Mock docid 搜索 client
+# =====================================================================
+
+class FakeDocidClient:
+    """可控的 docid 搜索 client 替身。
+
+    fetch(docids, logid) 按 script 返回拼接后的 results 字符串（用真实 assemble_results）。
+    记录每次调用的 docids/logid，便于断言路由与入参拼接。
+    """
+
+    def __init__(self) -> None:
+        self.calls: List[dict[str, Any]] = []
+        self.script: List[Any] = []
+
+    def set_script(self, *items: Any) -> "FakeDocidClient":
+        self.script = list(items)
+        return self
+
+    def fetch(self, docids, logid: str) -> str:
+        from academic_service.app.clients.docid_search_client import assemble_results
+        self.calls.append({"docids": list(docids), "logid": logid})
+        if self.script:
+            item = self.script.pop(0)
+        else:
+            item = []
+        if isinstance(item, Exception):
+            raise item
+        return assemble_results(item)
+
+
+@pytest.fixture
+def fake_docid_client() -> FakeDocidClient:
+    return FakeDocidClient()
+
+
+@pytest.fixture
+def fake_docid_client_factory(fake_docid_client: FakeDocidClient) -> Callable[[], Any]:
+    """返回总是产出同一 fake_docid_client 的工厂。"""
+    def _factory():
+        return fake_docid_client
+    return _factory
+
+
+# =====================================================================
 # App / Client fixtures
 # =====================================================================
 
 @pytest.fixture
-def app(settings: Settings, fake_client_factory: Callable[[], Any]):
-    """构建测试 app：关闭鉴权，注入 fake client 工厂。"""
+def app(settings: Settings, fake_client_factory: Callable[[], Any], fake_docid_client_factory: Callable[[], Any]):
+    """构建测试 app：关闭鉴权，注入 fake client 工厂（fileid + docid）。"""
     application = create_app(settings)
     # 覆盖 client 工厂依赖
-    from academic_service.app.api.v1.query import get_client_factory
+    from academic_service.app.api.v1.query import get_client_factory, get_docid_client_factory
     application.dependency_overrides[get_client_factory] = lambda: fake_client_factory
+    application.dependency_overrides[get_docid_client_factory] = lambda: fake_docid_client_factory
     # 也覆盖 get_settings，确保各依赖拿到测试 settings
     application.dependency_overrides[get_settings] = lambda: settings
     yield application
@@ -221,11 +266,12 @@ def app(settings: Settings, fake_client_factory: Callable[[], Any]):
 
 
 @pytest.fixture
-def auth_app(auth_settings: Settings, fake_client_factory: Callable[[], Any]):
+def auth_app(auth_settings: Settings, fake_client_factory: Callable[[], Any], fake_docid_client_factory: Callable[[], Any]):
     """开启鉴权的测试 app。"""
     application = create_app(auth_settings)
-    from academic_service.app.api.v1.query import get_client_factory
+    from academic_service.app.api.v1.query import get_client_factory, get_docid_client_factory
     application.dependency_overrides[get_client_factory] = lambda: fake_client_factory
+    application.dependency_overrides[get_docid_client_factory] = lambda: fake_docid_client_factory
     application.dependency_overrides[get_settings] = lambda: auth_settings
     yield application
     application.dependency_overrides.clear()

@@ -69,6 +69,9 @@ _YAML_PATHS: Dict[str, Tuple[str, ...]] = {
     # 下游 doc_fulltext 接口
     "doc_fulltext_url_path": ("doc_fulltext", "url_path"),
     "doc_auth_timestamp_tolerance_ms": ("doc_fulltext", "timestamp_tolerance_ms"),
+    # 下游 docid 搜索服务
+    "docid_search_url": ("docid_search", "url"),
+    "docid_search_auth_key": ("docid_search", "auth_key"),
     # request_id 前缀
     "request_id_prefix": ("request", "id_prefix"),
 }
@@ -243,6 +246,11 @@ class Settings(BaseSettings):
     doc_fulltext_url_path: str = "/copilot_for_docs/doc_fulltext"
     # 服务端允许的时间戳误差（毫秒），来源：limitMilliSecond = 600000
     doc_auth_timestamp_tolerance_ms: int = 600_000
+
+    # ---- 下游 docid 搜索服务（/search）----
+    docid_search_url: str = "http://10.37.0.140:6107/search"
+    # HMAC 鉴权密钥（由服务方分配）。密钥：从环境变量注入，切勿写进 YAML。
+    docid_search_auth_key: str = ""
 
     # ---- 其它 ----
     # 服务端自动生成 request_id 时的前缀

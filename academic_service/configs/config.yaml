@@ -48,6 +48,11 @@ doc_fulltext:
   url_path: "/copilot_for_docs/doc_fulltext"   # 下游接口路径，参与 HMAC 签名
   timestamp_tolerance_ms: 600000               # 服务端允许的时间戳误差（毫秒）
 
+# ---- 下游 docid 搜索服务（/search）----
+docid_search:
+  url: "http://10.37.0.140:6107/search"        # 搜索服务完整 URL（path 参与签名）
+  auth_key: ""                                 # 密钥：环境变量 DOCID_SEARCH_AUTH_KEY 注入，切勿在此填真实值
+
 # ---- 其它 ----
 request:
   id_prefix: "srv"           # 服务端自动生成 request_id 时的前缀

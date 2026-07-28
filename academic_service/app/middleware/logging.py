@@ -28,11 +28,14 @@ SENSITIVE_FIELD_NAMES = {
     "authorization",
     "token",
     "auth_key",
+    "authcode",
+    "auth_code",
     "apikey",
     "api_key",
     "secret",
     "password",
     "doc_service_auth_key",
+    "docid_search_auth_key",
 }
 
 # ---- 内容字段名（单独标记，整段省略）----

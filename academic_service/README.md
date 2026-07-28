@@ -17,7 +17,7 @@
 - **日志脱敏**：日志与错误响应不泄露密钥、token、文档全文
 - **高并发**：同步下游调用包装到 `asyncio.to_thread`，不阻塞事件循环
 - **uv 管理依赖**：依赖声明统一在 `pyproject.toml`，`uv.lock` 锁定可复现版本
-- **完整测试覆盖**：132 个测试（单元 / 上游模拟 / API / WebSocket / 验收 / 配置加载 / 客户端默认值）
+- **完整测试覆盖**：156 个测试（单元 / 上游模拟 / API / WebSocket / 验收 / 配置加载 / 客户端默认值 / type 路由）
 
 ---
 
@@ -72,6 +72,8 @@ YAML 采用嵌套结构，由 `app/config.py` 的 `_YAML_PATHS` 映射表展平�
 | `API_BEARER_TOKENS` | 允许的 Bearer token 集合（逗号分隔）—— **密钥** |
 | `DOC_SERVICE_HOST/PORT/SCHEME` | 下游地址（默认在 YAML，可在此覆盖） |
 | `DOC_SERVICE_AUTH_KEY` | 下游 HMAC 鉴权密钥 —— **密钥** |
+| `DOCID_SEARCH_URL` | docid 搜索服务 URL（默认在 YAML，可在此覆盖） |
+| `DOCID_SEARCH_AUTH_KEY` | docid 搜索服务 HMAC 鉴权密钥 —— **密钥** |
 | `DEFAULT_DEVICE_*` | 默认设备信息（请求级可覆盖，默认在 YAML） |
 
 > 任意 YAML 字段都可被同名环境变量覆盖（字段名不区分大小写）。
@@ -141,6 +143,37 @@ python3 start_service.py --port 12135
 ```
 
 默认只需传 `query`（文件 ID），`options` 可全部省略，内部使用默认值。
+
+#### 查询类型路由（`type`）
+
+通过顶层 `type` 字段选择下游流程（`query` 与 `queries` 至少传一个）：
+
+| `type` | 含义 | 入参 | 下游 |
+|---|---|---|---|
+| `fileid`（默认） | 按文件 ID 查全文（原行为） | `query`（单个文件ID）；不支持 `queries` | doc_fulltext |
+| `docid` | 按 docid 列表查搜索服务 | `queries`（docid 列表）或单个 `query` | /search |
+
+`docid` 模式示例：
+
+```json
+{
+  "queries": ["4309586360676299249", "7962161433555592055"],
+  "type": "docid"
+}
+```
+
+`docid` 成功响应（`results` 为拼接字符串：每篇 `[i]title:..|||content:..`，chunks 按 `\n` 拼接，多篇以 `\n` 分隔，损坏项跳过）：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "request_id": "srv_...",
+  "data": {
+    "results": "[1]title:论文A|||content:第一段\n第二段\n[2]title:论文B|||content:摘要"
+  }
+}
+```
 
 成功响应：
 
@@ -289,7 +322,7 @@ def query(file_id: str, options: dict | None = None, stream: bool = False) -> di
 ## 测试
 
 ```bash
-uv run pytest          # 运行全部 132 个测试（需先 uv sync --extra dev）
+uv run pytest          # 运行全部 156 个测试（需先 uv sync --extra dev）
 uv run pytest -q       # 简洁输出
 ```
 

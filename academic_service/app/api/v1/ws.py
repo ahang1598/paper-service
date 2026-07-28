@@ -29,10 +29,15 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError as PydanticValidationError
 
 from academic_service.app.api.deps import make_default_device
-from academic_service.app.api.v1.query import get_client_factory
+from academic_service.app.api.v1.query import get_client_factory, get_docid_client_factory, TYPE_ACTION_MAP
 from academic_service.app.config import Settings, get_settings
 from academic_service.app.core.registry import HandlerContext, get_handler_class
 from academic_service.app.core.security import verify_token
+from academic_service.app.schemas.navigator import (
+    ALLOWED_QUERY_TYPES,
+    QUERY_TYPE_DOCID,
+    QUERY_TYPE_FILEID,
+)
 
 logger = logging.getLogger("paper-service.api.ws")
 
@@ -40,10 +45,7 @@ router = APIRouter(tags=["ws"])
 
 REQUEST_ID_PREFIX = "srv"
 
-# 固定的 action：当前对外只暴露 doc_fulltext
-ACTION_DOC_FULLTEXT = "doc_fulltext"
-
-# options 内允许覆盖 DocFullTextParams 的字段（用于新信封转译）
+# options 内允许覆盖 DocFullTextParams 的字段（fileid 模式信封转译用）
 _OPTION_KEYS = ("splitter", "pages", "with_rect", "doc_hash", "device")
 
 
@@ -63,6 +65,7 @@ async def ws_query(
     websocket: WebSocket,
     settings: Settings = Depends(get_settings),
     client_factory=Depends(get_client_factory),
+    docid_client_factory=Depends(get_docid_client_factory),
 ) -> None:
     """WebSocket 统一查询入口。
 
@@ -88,17 +91,16 @@ async def ws_query(
 
     async def _run_query(request_id: str, raw: dict) -> None:
         """执行单次查询并推送事件。异常转 error 事件；结束时设置 query_done。"""
-        query = raw.get("query")
-        options = raw.get("options") or {}
-        if not query:
+        msg_type = raw.get("type") or QUERY_TYPE_FILEID
+        if msg_type not in ALLOWED_QUERY_TYPES:
             await websocket.send_json({
                 "type": "error", "code": "VALIDATION_ERROR",
-                "message": "query 字段必传（文件ID）", "request_id": request_id,
+                "message": f"type 必须为 {sorted(ALLOWED_QUERY_TYPES)} 之一", "request_id": request_id,
             })
             return
 
-        # 固定 action：doc_fulltext
-        handler_cls = get_handler_class(ACTION_DOC_FULLTEXT)
+        action = TYPE_ACTION_MAP[msg_type]
+        handler_cls = get_handler_class(action)
         if handler_cls is None:  # pragma: no cover - 注册由 main 触发
             await websocket.send_json({
                 "type": "error", "code": "INTERNAL_ERROR",
@@ -106,11 +108,34 @@ async def ws_query(
             })
             return
 
-        # 把新信封转译为 DocFullTextParams 并二次校验
-        params_dict = {"file_id": query, **{
-            k: v for k, v in options.items()
-            if k in _OPTION_KEYS and v is not None
-        }}
+        # 按类型转译入参 + 选择 client 工厂
+        if msg_type == QUERY_TYPE_DOCID:
+            queries = [q.strip() for q in (raw.get("queries") or []) if isinstance(q, str) and q.strip()]
+            q_raw = raw.get("query")
+            docids = queries or ([q_raw.strip()] if isinstance(q_raw, str) and q_raw.strip() else [])
+            if not docids:
+                await websocket.send_json({
+                    "type": "error", "code": "VALIDATION_ERROR",
+                    "message": "docid 模式需要 query 或 queries", "request_id": request_id,
+                })
+                return
+            params_dict = {"docids": docids}
+            factory = docid_client_factory
+        else:  # fileid
+            query = raw.get("query")
+            if not query:
+                await websocket.send_json({
+                    "type": "error", "code": "VALIDATION_ERROR",
+                    "message": "fileid 模式 query 字段必传（文件ID）", "request_id": request_id,
+                })
+                return
+            options = raw.get("options") or {}
+            params_dict = {"file_id": query, **{
+                k: v for k, v in options.items()
+                if k in _OPTION_KEYS and v is not None
+            }}
+            factory = client_factory
+
         try:
             params = handler_cls.params_schema.model_validate(params_dict)
         except PydanticValidationError as exc:
@@ -122,7 +147,7 @@ async def ws_query(
 
         handler = handler_cls()
         ctx = HandlerContext(
-            client_factory=client_factory,
+            client_factory=factory,
             default_device=make_default_device(settings),
             request_id=request_id,
             settings=settings,
