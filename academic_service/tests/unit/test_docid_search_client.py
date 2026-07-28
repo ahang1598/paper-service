@@ -126,3 +126,33 @@ def test_assemble_chunks_as_list_passthrough():
     # chunks 已是 list（非 JSON 串）也应支持
     results = [{"title": "T", "extrainfo": {"meta_data": {"chunks": ["a", "b"]}}}]
     assert assemble_results(results) == "[1]title:T|||content:a\nb"
+
+
+# =====================================================================
+# 容错：真实下游可能把 extrainfo / meta_data 以 JSON 字符串返回（曾导致 .get 崩溃）
+# =====================================================================
+
+def test_assemble_extrainfo_as_json_string():
+    """extrainfo 整体是 JSON 字符串 → 解码后取 chunks。"""
+    import json as _json
+    extrainfo_str = _json.dumps({"meta_data": {"chunks": _json.dumps(["a", "b"])}})
+    results = [{"title": "T", "extrainfo": extrainfo_str}]
+    assert assemble_results(results) == "[1]title:T|||content:a\nb"
+
+
+def test_assemble_meta_data_as_json_string():
+    """meta_data 是 JSON 字符串 → 解码后取 chunks。"""
+    import json as _json
+    meta_str = _json.dumps({"chunks": _json.dumps(["x"])})
+    results = [{"title": "T", "extrainfo": {"meta_data": meta_str}}]
+    assert assemble_results(results) == "[1]title:T|||content:x"
+
+
+def test_assemble_garbage_extrainfo_string_skipped_no_crash():
+    """extrainfo 是非法 JSON 字符串 → 跳过该条，不抛异常。"""
+    results = [
+        {"title": "Bad", "extrainfo": "not-json"},
+        {"title": "Good", "extrainfo": {"meta_data": {"chunks": '["y"]'}}},
+    ]
+    assert assemble_results(results) == "[1]title:Good|||content:y"
+

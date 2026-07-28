@@ -168,10 +168,30 @@ def sign_request(secret_key: str, timestamp: str, uri: str, body_str: str) -> st
     ).hexdigest()
 
 
+def _as_dict(value: Any) -> Dict[str, Any]:
+    """把值规整为 dict：dict 原样；str 尝试 json.loads；其余返回 {}。
+
+    真实下游可能把 extrainfo / meta_data 以 JSON 字符串形式返回，需容错解码。
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except (ValueError, TypeError):
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
+    return {}
+
+
 def _extract_chunks(item: Dict[str, Any]) -> Optional[List[str]]:
-    """从单个 result 取出 chunks（JSON 串或原生 list 均可），非法/缺失/空返回 None。"""
+    """从单个 result 取出 chunks（extrainfo/meta_data/chunks 均容忍 JSON 字符串）。
+
+    缺失/非法/空返回 None（调用方据此跳过该条）。任何异常都不向上抛。
+    """
     try:
-        meta_data = ((item.get(FIELD_EXTRAINFO) or {}).get(FIELD_META_DATA)) or {}
+        extrainfo = _as_dict(item.get(FIELD_EXTRAINFO))
+        meta_data = _as_dict(extrainfo.get(FIELD_META_DATA))
         raw = meta_data.get(FIELD_CHUNKS)
         if raw is None:
             return None
@@ -180,7 +200,7 @@ def _extract_chunks(item: Dict[str, Any]) -> Optional[List[str]]:
             return None
         cleaned = [c for c in chunks if isinstance(c, str) and c.strip()]
         return cleaned or None
-    except (ValueError, TypeError):
+    except Exception:
         return None
 
 
@@ -214,9 +234,17 @@ def assemble_results(results: Optional[List[Dict[str, Any]]]) -> str:
 class DocidSearchClient:
     """/search 接口客户端（同步，单次请求，无轮询）。"""
 
-    def __init__(self, config: DocidSearchConfig, timeout: float = DEFAULT_TIMEOUT_SEC) -> None:
+    def __init__(
+        self,
+        config: DocidSearchConfig,
+        timeout: float = DEFAULT_TIMEOUT_SEC,
+        log_downstream_request: bool = False,
+        log_downstream_response: bool = False,
+    ) -> None:
         self.config = config
         self.timeout = timeout
+        self.log_downstream_request = log_downstream_request
+        self.log_downstream_response = log_downstream_response
         self._session = requests.Session()
 
     def _uri(self) -> str:
@@ -237,6 +265,9 @@ class DocidSearchClient:
         body_str = json.dumps(build_search_body(docids, logid))
         timestamp = str(int(time.time() * 1000))
         headers = self._build_headers(timestamp, body_str)
+        if self.log_downstream_request:
+            # 仅打印 url + body（不含 authCode 等鉴权头）
+            logger.info("[downstream-request] url=%s body=%s", self.config.url, body_str)
         try:
             logger.debug("POST %s logid=%s", self.config.url, logid)
             resp = self._session.post(
@@ -247,6 +278,9 @@ class DocidSearchClient:
             )
         except requests.RequestException as exc:
             raise RequestError(f"请求失败: {exc}") from exc
+
+        if self.log_downstream_response:
+            logger.info("[downstream-response] status=%s body=%s", resp.status_code, resp.text)
 
         if resp.status_code != 200:
             raise RequestError(f"HTTP {resp.status_code}: {resp.text[:200]}")

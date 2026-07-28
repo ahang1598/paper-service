@@ -91,6 +91,8 @@ async def ws_query(
 
     async def _run_query(request_id: str, raw: dict) -> None:
         """执行单次查询并推送事件。异常转 error 事件；结束时设置 query_done。"""
+        if settings.debug_log_request:
+            logger.info("[ws-request] %s", raw)
         msg_type = raw.get("type") or QUERY_TYPE_FILEID
         if msg_type not in ALLOWED_QUERY_TYPES:
             await websocket.send_json({

@@ -56,3 +56,9 @@ docid_search:
 # ---- 其它 ----
 request:
   id_prefix: "srv"           # 服务端自动生成 request_id 时的前缀
+
+# ---- 调试日志开关（默认关；排查问题时在 yaml 或环境变量打开）----
+debug:
+  log_request: false              # 打印进入服务的请求入参（HTTP/WS 请求体）
+  log_downstream_request: false   # 打印访问下游（全文获取）时的入参（url + body，不含鉴权头）
+  log_downstream_response: false  # 打印下游出参（响应体）——单独开关，响应可能很大

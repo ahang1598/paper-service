@@ -74,6 +74,10 @@ _YAML_PATHS: Dict[str, Tuple[str, ...]] = {
     "docid_search_auth_key": ("docid_search", "auth_key"),
     # request_id 前缀
     "request_id_prefix": ("request", "id_prefix"),
+    # 调试日志开关
+    "debug_log_request": ("debug", "log_request"),
+    "debug_log_downstream_request": ("debug", "log_downstream_request"),
+    "debug_log_downstream_response": ("debug", "log_downstream_response"),
 }
 
 
@@ -255,6 +259,14 @@ class Settings(BaseSettings):
     # ---- 其它 ----
     # 服务端自动生成 request_id 时的前缀
     request_id_prefix: str = "srv"
+
+    # ---- 调试日志开关（默认关；按需在 yaml/env 打开）----
+    # 打印进入服务的请求入参（HTTP/WS 请求体）
+    debug_log_request: bool = False
+    # 打印访问下游（全文获取）时的入参（url + body）
+    debug_log_downstream_request: bool = False
+    # 打印下游出参（响应体）—— 单独开关，响应可能很大
+    debug_log_downstream_response: bool = False
 
     # ----- 值归一化 -----
     @field_validator("api_bearer_tokens", mode="before")

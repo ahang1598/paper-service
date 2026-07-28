@@ -85,6 +85,8 @@ def make_doc_client_factory(settings: Settings):
             retry_backoff_sec=settings.doc_retry_backoff_sec,
             poll_max_times=settings.doc_poll_max_times,
             poll_interval_sec=settings.doc_poll_interval_sec,
+            log_downstream_request=settings.debug_log_downstream_request,
+            log_downstream_response=settings.debug_log_downstream_response,
         )
 
     return _factory
@@ -112,6 +114,10 @@ def make_docid_search_client_factory(settings: Settings):
             url=settings.docid_search_url,
             auth_key=settings.docid_search_auth_key,
         )
-        return DocidSearchClient(config=config)
+        return DocidSearchClient(
+            config=config,
+            log_downstream_request=settings.debug_log_downstream_request,
+            log_downstream_response=settings.debug_log_downstream_response,
+        )
 
     return _factory

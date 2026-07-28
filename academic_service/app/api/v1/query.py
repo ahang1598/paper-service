@@ -107,6 +107,9 @@ async def query(
     """
     request_id = _resolve_request_id(req, settings.request_id_prefix)
 
+    if settings.debug_log_request:
+        logger.info("[request] type=%s body=%s", req.type, req.model_dump())
+
     # 1) stream 路由选择：true 时 HTTP 主动拒绝并引导到 WebSocket
     if req.stream:
         err = ValidationError(

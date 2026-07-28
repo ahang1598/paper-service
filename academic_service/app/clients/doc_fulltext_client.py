@@ -32,6 +32,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import logging
 import time
 import uuid
@@ -280,6 +281,8 @@ class DocFullTextClient:
         retry_backoff_sec: Optional[float] = None,
         poll_max_times: Optional[int] = None,
         poll_interval_sec: Optional[float] = None,
+        log_downstream_request: bool = False,
+        log_downstream_response: bool = False,
     ) -> None:
         """构造客户端。
 
@@ -294,6 +297,8 @@ class DocFullTextClient:
         self.retry_backoff_sec = retry_backoff_sec if retry_backoff_sec is not None else defaults["doc_retry_backoff_sec"]
         self.poll_max_times = poll_max_times if poll_max_times is not None else defaults["doc_poll_max_times"]
         self.poll_interval_sec = poll_interval_sec if poll_interval_sec is not None else defaults["doc_poll_interval_sec"]
+        self.log_downstream_request = log_downstream_request
+        self.log_downstream_response = log_downstream_response
         self._session = requests.Session()
 
     # ---------- 鉴权 ----------
@@ -318,6 +323,9 @@ class DocFullTextClient:
         url = f"{self.config.base_url}{self.config.url_path}"
         headers = self._build_headers(device_id=request.device.device_id)
         payload = request.to_dict()
+        if self.log_downstream_request:
+            # 仅打印 url + body（不含 token 等鉴权头）
+            logger.info("[downstream-request] url=%s body=%s", url, json.dumps(payload))
 
         last_exc: Optional[Exception] = None
         for attempt in range(1, self.max_retries + 1):
@@ -335,6 +343,9 @@ class DocFullTextClient:
                 if attempt < self.max_retries:
                     time.sleep(self.retry_backoff_sec * attempt)
                 continue
+
+            if self.log_downstream_response:
+                logger.info("[downstream-response] status=%s body=%s", resp.status_code, resp.text)
 
             # HTTP 状态码层校验
             if resp.status_code != 200:
