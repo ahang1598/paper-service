@@ -156,3 +156,29 @@ def test_assemble_garbage_extrainfo_string_skipped_no_crash():
     ]
     assert assemble_results(results) == "[1]title:Good|||content:y"
 
+
+# =====================================================================
+# 真实响应回归：tests/fixtures/docid_response_real.json（chunks 在 extrainfo.chunks）
+# =====================================================================
+
+def test_assemble_real_response_fixture():
+    """真实 /search 响应：chunks 直接挂在 extrainfo 下，应拼出 2 篇、含两个 title。"""
+    import json
+    import re
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parent.parent / "fixtures" / "docid_response_real.json"
+    body = json.loads(fixture.read_text(encoding="utf-8"))
+    results = body.get("results") or []
+
+    out = assemble_results(results)
+    assert out.startswith("[1]title:Reinforcement Learning Enhanced LLMs: A Survey|||content:")
+    assert len(out) > 1000  # 内容非空
+
+    entries = re.findall(r"^\[(\d+)\]title:([^|]*)\|\|\|", out, flags=re.MULTILINE)
+    assert [n for n, _ in entries] == ["1", "2"]
+    titles = [t.strip() for _, t in entries]
+    assert "Reinforcement Learning Enhanced LLMs: A Survey" in titles
+    assert "The Evolution and Impact of Reinforcement Learning in Modern Artificial Intelligence" in titles
+
+

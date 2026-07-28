@@ -185,14 +185,20 @@ def _as_dict(value: Any) -> Dict[str, Any]:
 
 
 def _extract_chunks(item: Dict[str, Any]) -> Optional[List[str]]:
-    """从单个 result 取出 chunks（extrainfo/meta_data/chunks 均容忍 JSON 字符串）。
+    """从单个 result 取出 chunks。
 
-    缺失/非法/空返回 None（调用方据此跳过该条）。任何异常都不向上抛。
+    真实响应里 ``chunks`` 直接挂在 ``extrainfo`` 下；样例/兼容情形在 ``extrainfo.meta_data.chunks``。
+    extrainfo / meta_data / chunks 均容忍 JSON 字符串。缺失/非法/空返回 None（调用方据此跳过）。
+    任何异常都不向上抛。
     """
     try:
         extrainfo = _as_dict(item.get(FIELD_EXTRAINFO))
-        meta_data = _as_dict(extrainfo.get(FIELD_META_DATA))
-        raw = meta_data.get(FIELD_CHUNKS)
+        # 优先：extrainfo.chunks（真实响应）
+        raw = extrainfo.get(FIELD_CHUNKS)
+        # 兼容：extrainfo.meta_data.chunks（样例结构）
+        if raw is None:
+            meta_data = _as_dict(extrainfo.get(FIELD_META_DATA))
+            raw = meta_data.get(FIELD_CHUNKS)
         if raw is None:
             return None
         chunks = json.loads(raw) if isinstance(raw, str) else raw
