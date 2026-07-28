@@ -1,0 +1,53 @@
+# ============================================================================
+# paper-service 基础配置（base，生产安全默认）
+# ----------------------------------------------------------------------------
+# - 本文件为所有环境的公共默认值，提交到版本库。
+# - 环境差异由 config.<env>.yaml 叠加覆盖；APP_ENV 选择叠加文件（默认 prod）。
+# - **密钥严禁写在此处**：doc_service.auth_key 与 auth.bearer_tokens 留空，
+#   由环境变量 / .env 注入（DOC_SERVICE_AUTH_KEY / API_BEARER_TOKENS）。
+# - 任何字段都可被环境变量覆盖（优先级：env > .env > 本文件）。
+# ============================================================================
+
+# ---- 本服务监听 ----
+service:
+  host: "0.0.0.0"
+  port: 12135
+  log_level: INFO
+
+# ---- 对外鉴权（HTTP 与 WebSocket 共用）----
+auth:
+  enabled: true              # 生产必须为 true；本地调试用 config.dev.yaml 关闭
+  bearer_tokens: []          # 密钥：环境变量 API_BEARER_TOKENS 注入（逗号分隔），切勿在此填真实值
+
+# ---- 下游文档全文服务 ----
+doc_service:
+  scheme: http
+  host: "10.34.236.1"
+  port: 9983
+  auth_key: ""               # 密钥：环境变量 DOC_SERVICE_AUTH_KEY 注入
+
+# ---- 默认设备信息（请求下游时使用，可在请求级覆盖）----
+default_device:
+  app_version: "12.1.8.410"
+  device_id: "pmq"
+  device_model: "ALN-AL00"
+  device_type: "phone"
+  prd_pkg_name: "com.huawei.vassistant"
+
+# ---- 下游客户端运行参数 ----
+client:
+  connect_timeout_sec: 5     # 建连超时（秒）
+  read_timeout_sec: 30       # 读取超时（秒）
+  max_retries: 3             # 网络异常最大重试次数
+  retry_backoff_sec: 1.0     # 重试退避基数（秒，按 attempt 线性递增）
+  poll_max_times: 30         # pending 最大轮询次数
+  poll_interval_sec: 2.0     # pending 轮询间隔（秒）
+
+# ---- 下游 doc_fulltext 接口 ----
+doc_fulltext:
+  url_path: "/copilot_for_docs/doc_fulltext"   # 下游接口路径，参与 HMAC 签名
+  timestamp_tolerance_ms: 600000               # 服务端允许的时间戳误差（毫秒）
+
+# ---- 其它 ----
+request:
+  id_prefix: "srv"           # 服务端自动生成 request_id 时的前缀
