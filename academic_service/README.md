@@ -16,32 +16,23 @@
 - **异常分类 + 统一错误码**：错误响应遵循统一 envelope，HTTP 状态码集中映射
 - **日志脱敏**：日志与错误响应不泄露密钥、token、文档全文
 - **高并发**：同步下游调用包装到 `asyncio.to_thread`，不阻塞事件循环
-- **uv 管理依赖**：依赖声明统一在 `pyproject.toml`，`uv.lock` 锁定可复现版本
+- **pip + requirements.txt 管理依赖**：单一 `requirements.txt`（运行期 + 测试），标准 `venv` 虚拟环境
 - **完整测试覆盖**：156 个测试（单元 / 上游模拟 / API / WebSocket / 验收 / 配置加载 / 客户端默认值 / type 路由）
 
 ---
 
 ## 快速开始
 
-本项目使用 [**uv**](https://docs.astral.sh/uv/) 管理依赖与虚拟环境，依赖声明统一在 `pyproject.toml`。
+本项目使用 **pip + requirements.txt** 管理依赖，虚拟环境用标准 `venv`。
 
-### 0. 安装 uv（如尚未安装）
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### 1. 安装依赖
+### 0. 创建虚拟环境并安装依赖
 
 ```bash
-uv sync                 # 创建 .venv 并安装运行期依赖（同时生成/更新 uv.lock）
-uv sync --extra dev     # 额外安装测试依赖（pytest / pytest-asyncio / httpx）
+python3 -m venv .venv                                  # 创建虚拟环境
+.venv/bin/pip install -r requirements.txt              # 安装依赖（运行期 + 测试）
 ```
 
-> `uv.lock` 已纳入版本管理，保证依赖版本可复现。新增/升级依赖时编辑 `pyproject.toml` 后重新 `uv sync` 即可。
+> 升级依赖时编辑 `requirements.txt` 后重新 `pip install -r` 即可。
 
 ### 2. 配置
 
@@ -89,12 +80,13 @@ YAML 采用嵌套结构，由 `app/config.py` 的 `_YAML_PATHS` 映射表展平�
 ### 3. 启动
 
 ```bash
-# 方式一：通过 uv 运行（自动使用 .venv）
-uv run uvicorn app.main:app --host 0.0.0.0 --port 12135 --reload
+# 方式一（推荐）：一键启动脚本（自动创建 .venv、pip 装依赖、后台启动、健康检查）
+python3 scripts/start_service.py
 
-# 方式二：激活虚拟环境后直接运行
+# 方式二：激活虚拟环境后用 uvicorn 运行
+# 注：代码以 academic_service.app.* 为包根导入，需把项目父目录加入 PYTHONPATH
 source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 12135 --reload
+PYTHONPATH="$(dirname "$(pwd)")" uvicorn academic_service.app.main:app --host 0.0.0.0 --port 12135 --reload
 ```
 
 启动后：
@@ -113,7 +105,7 @@ python3 start_service.py --port 12135
 ```
 
 脚本行为：
-- 自动把 `~/.local/bin` 加入 PATH（uv 常见安装位），校验 `.venv` 与关键包，缺失则自动 `uv sync --extra dev`
+- 校验 `.venv` 与关键包，缺失则自动 `python -m venv` 创建并 `pip install -r requirements.txt`
 - 若端口已被占用，先优雅关闭旧服务（SIGTERM→SIGKILL）再启动
 - 后台启动（setsid 脱离进程组，脚本退出后服务继续运行），日志按启动时间戳归档到 `logs/service_YYYYMMDD_HHMMSS.log`
 - 启动后轮询 `/health` 确认服务就绪；失败则打印日志末尾便于排查
@@ -322,11 +314,12 @@ def query(file_id: str, options: dict | None = None, stream: bool = False) -> di
 ## 测试
 
 ```bash
-uv run pytest          # 运行全部 156 个测试（需先 uv sync --extra dev）
-uv run pytest -q       # 简洁输出
+# 代码以 academic_service.app.* 为包根导入，需把项目父目录加入 PYTHONPATH
+PYTHONPATH="$(dirname "$(pwd)")" .venv/bin/pytest          # 运行全部 160 个测试
+PYTHONPATH="$(dirname "$(pwd)")" .venv/bin/pytest -q       # 简洁输出
 ```
 
-> 测试依赖在 `pyproject.toml` 的 `[project.optional-dependencies].dev` 中声明，`uv sync --extra dev` 会一并安装。pytest 配置位于 `pyproject.toml` 的 `[tool.pytest.ini_options]`。
+> 测试依赖已合入 `requirements.txt`，`.venv/bin/pip install -r requirements.txt` 会一并安装。pytest 配置位于 `pytest.ini`。
 
 测试分层（零真实网络，全部 mock）：
 

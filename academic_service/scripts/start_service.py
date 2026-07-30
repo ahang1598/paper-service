@@ -3,19 +3,19 @@
 """paper-service 一键启动脚本（在 WSL Linux 内运行）。
 
 功能：
-    1. 依赖检查：补全 uv 所在 PATH → 校验 .venv 与关键包 → 缺失则自动 uv sync。
+    1. 依赖检查：校验 .venv 与关键包 → 缺失则自动 python -m venv 创建并 pip install -r requirements.txt。
     2. 端口冲突处理：若服务端口已被占用，先优雅关闭旧进程（SIGTERM→SIGKILL）。
     3. 后台启动 uvicorn：脱离脚本进程组（setsid），脚本退出后服务继续运行。
     4. 日志按启动时间戳归档：logs/service_YYYYMMDD_HHMMSS.log，每次启动一个新文件。
     5. 健康检查：轮询 /health 确认服务真正可用。
 
 用法（在 WSL 内、项目根目录）：
-    python3 start_service.py           # 启动
-    python3 start_service.py --help    # 查看选项
+    python3 scripts/start_service.py           # 启动
+    python3 scripts/start_service.py --help    # 查看选项
 
-环境前提（已在 WSL Ubuntu-22.04 探测确认）：
-    - uv 位于 ~/.local/bin/uv（非交互 shell 的 PATH 里没有，本脚本会显式补）
-    - .venv 由 uv 管理，uvicorn/fastapi 通常已装好
+环境前提：
+    - python3 可用（用于创建 .venv）
+    - .venv 由本脚本用 pip + requirements.txt 管理，uvicorn/fastapi 会被自动装好
     - 端口检测用 ss（netstat 在 WSL 不可用），回退 lsof/fuser
 """
 
@@ -43,7 +43,7 @@ DEFAULT_PORT = 12135
 APP_MODULE = "academic_service.app.main:app"
 HEALTH_PATH = "/health"
 
-# 关键运行期包（import 失败说明 .venv 不完整，需要 uv sync）
+# 关键运行期包（import 失败说明 .venv 不完整，需要 pip install -r requirements.txt）
 REQUIRED_IMPORTS = ["fastapi", "uvicorn", "pydantic_settings", "requests", "yaml"]
 
 # 健康检查轮询参数
@@ -74,31 +74,16 @@ def fail(msg: str) -> None:
     print(f"[FAIL] {msg}", flush=True)
 
 
-def ensure_uv_on_path() -> None:
-    """把 uv 常见安装目录加入 PATH（非交互登录 shell 通常拿不到 ~/.local/bin）。"""
-    candidates = [
-        os.path.expanduser("~/.local/bin"),
-        os.path.expanduser("~/.cargo/bin"),
-    ]
-    added = []
-    for c in candidates:
-        if c and Path(c).is_dir() and c not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = c + os.pathsep + os.environ["PATH"]
-            added.append(c)
-    if added:
-        info(f"已将以下目录加入 PATH: {added}")
-
-
 def project_root() -> Path:
-    """项目根（含 pyproject.toml 的目录，即 academic_service/）。
+    """项目根（含 requirements.txt 的目录，即 academic_service/）。
 
-    从脚本位置向上查找 pyproject.toml，使脚本可放在 scripts/ 等子目录中。
+    从脚本位置向上查找 requirements.txt，使脚本可放在 scripts/ 等子目录中。
     """
     here = Path(__file__).resolve().parent
     for candidate in (here, *here.parents):
-        if (candidate / "pyproject.toml").is_file():
+        if (candidate / "requirements.txt").is_file():
             return candidate
-    # 兜底：脚本所在目录的上一级（兼容直接放在根目录的旧布局）
+    # 兜底：脚本所在目录的上一级
     return here.parent
 
 
@@ -131,15 +116,45 @@ def venv_uvicorn(root: Path) -> Path:
 # 1. 依赖检查
 # =====================================================================
 
-def check_uv() -> str:
-    """确认 uv 可用，返回 uv 可执行路径；不可用则报错退出。"""
-    uv_path = shutil.which("uv")
-    if uv_path:
-        return uv_path
-    fail("未找到 uv 命令。请先安装 uv：")
-    print("    curl -LsSf https://astral.sh/uv/install.sh | sh")
-    print("  安装后重新运行本脚本（脚本会自动把 ~/.local/bin 加入 PATH）。")
-    sys.exit(1)
+def system_python() -> str:
+    """用于创建虚拟环境的解释器（优先 python3，回退当前解释器）。"""
+    return shutil.which("python3") or sys.executable
+
+
+def ensure_venv(root: Path) -> None:
+    """确保 .venv 存在；不存在则用 python -m venv 创建。"""
+    venv_dir = root / ".venv"
+    if venv_dir.exists():
+        return
+    info(f".venv 不存在，使用 {system_python()} -m venv 创建虚拟环境...")
+    try:
+        subprocess.run(
+            [system_python(), "-m", "venv", str(venv_dir)],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        fail(f"创建虚拟环境失败（退出码 {e.returncode}）。")
+        sys.exit(1)
+    ok(".venv 已创建")
+
+
+def pip_install(root: Path, requirements_file: str) -> None:
+    """在 .venv 内执行 pip install -r <requirements_file>。"""
+    py = venv_python(root)
+    req_path = root / requirements_file
+    if not req_path.is_file():
+        fail(f"未找到依赖文件: {req_path}")
+        sys.exit(1)
+    info(f"安装依赖: {py} -m pip install -r {requirements_file}")
+    try:
+        subprocess.run(
+            [str(py), "-m", "pip", "install", "-r", str(req_path)],
+            check=True,
+            cwd=str(root),
+        )
+    except subprocess.CalledProcessError as e:
+        fail(f"pip install 失败（退出码 {e.returncode}）。请检查网络或 {requirements_file}。")
+        sys.exit(1)
 
 
 def venv_healthy(root: Path) -> bool:
@@ -161,29 +176,21 @@ def venv_healthy(root: Path) -> bool:
 
 
 def ensure_dependencies(root: Path) -> None:
-    """依赖检查：.venv 不完整则 uv sync --extra dev。"""
-    uv_path = check_uv()
+    """依赖检查：.venv 不完整则创建并 pip install -r requirements.txt。"""
     if venv_healthy(root):
         ok(f".venv 完整，关键包可导入（{', '.join(REQUIRED_IMPORTS)}）")
         return
 
-    if not (root / ".venv").exists():
-        info(".venv 不存在，执行 uv sync --extra dev 创建虚拟环境并安装依赖...")
+    if (root / ".venv").exists():
+        info(".venv 存在但关键包缺失，执行 pip install -r requirements.txt 修复...")
     else:
-        info(".venv 存在但关键包缺失，执行 uv sync --extra dev 修复...")
+        ensure_venv(root)
+        info("执行 pip install -r requirements.txt 安装运行期依赖...")
 
-    try:
-        subprocess.run(
-            [uv_path, "sync", "--extra", "dev"],
-            check=True,
-            cwd=str(root),
-        )
-    except subprocess.CalledProcessError as e:
-        fail(f"uv sync 失败（退出码 {e.returncode}）。请检查网络或 pyproject.toml。")
-        sys.exit(1)
+    pip_install(root, "requirements.txt")
 
     if not venv_healthy(root):
-        fail("uv sync 完成后关键包仍无法导入，请手动排查 .venv。")
+        fail("pip install 完成后关键包仍无法导入，请手动排查 .venv。")
         sys.exit(1)
     ok("依赖安装完成，.venv 已就绪")
 
@@ -413,8 +420,7 @@ def main() -> int:
     print(f"  监听: {args.host}:{args.port}")
     print("=" * 60)
 
-    # 1. 补 PATH + 依赖检查
-    ensure_uv_on_path()
+    # 1. 依赖检查
     ensure_dependencies(root)
 
     # 2. 端口冲突处理
