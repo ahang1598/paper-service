@@ -64,7 +64,10 @@ paper_processing:
 # ---- docid relevant reranker ----
 reranker:
   provider: internal                            # internal / siliconflow
-  top_k: 8                                      # 每篇论文独立 top-k
+  top_k: 8                                      # 每篇论文 top-k 硬上限
+  top_k_min: 5                                  # 动态 top-k 最小值（不足时取实际 chunk/合格结果数）
+  top_k_ratio: 0.1                              # 实际 top-k 按 chunk 数动态取 ceil(10%)
+  min_score: 0.2                                # 低于门槛不返回，不强制填满 top-k
   neighbor_window: 1                            # seed 同章节前后邻居数
   batch_size: 32
   max_concurrency: 3

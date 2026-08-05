@@ -46,6 +46,7 @@ def test_yaml_paths_cover_all_settings_fields():
         "doc_fulltext_url_path", "doc_auth_timestamp_tolerance_ms",
         "request_id_prefix",
         "debug_log_paper_processing",
+        "reranker_top_k_min", "reranker_top_k_ratio", "reranker_min_score",
     }
     assert must_have <= set(_YAML_PATHS)
 
@@ -196,6 +197,23 @@ def test_paper_processing_debug_log_switch_can_be_enabled_by_env(monkeypatch):
     monkeypatch.setenv("DEBUG_LOG_PAPER_PROCESSING", "true")
     s = Settings(_env_file=None)
     assert s.debug_log_paper_processing is True
+
+
+@pytest.mark.parametrize("ratio", [0, -0.1, 1.01, float("nan")])
+def test_reranker_top_k_ratio_must_be_a_finite_fraction(ratio):
+    with pytest.raises(ValueError, match="top_k_ratio"):
+        Settings(_env_file=None, reranker_top_k_ratio=ratio)
+
+
+def test_reranker_min_score_must_be_finite():
+    with pytest.raises(ValueError, match="min_score"):
+        Settings(_env_file=None, reranker_min_score=float("inf"))
+
+
+def test_reranker_top_k_min_defaults_to_five_and_cannot_exceed_cap():
+    assert Settings(_env_file=None).reranker_top_k_min == 5
+    with pytest.raises(ValueError, match="top_k_min"):
+        Settings(_env_file=None, reranker_top_k=4, reranker_top_k_min=5)
 
 
 # =====================================================================

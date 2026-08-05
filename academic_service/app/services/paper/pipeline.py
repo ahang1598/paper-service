@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 from collections import defaultdict
 from typing import Any, Iterable
 
@@ -239,6 +240,15 @@ def _expand_and_merge(
     return deduped
 
 
+def _effective_top_k(
+    chunk_count: int, *, minimum: int, cap: int, ratio: float
+) -> int:
+    """按论文规模动态限制 seed 数；cap 仅作为硬上限。"""
+    if chunk_count <= 0:
+        return 0
+    return min(chunk_count, cap, max(minimum, math.ceil(chunk_count * ratio)))
+
+
 async def build_relevant_response(
     records: list[DocidSearchDocument],
     question: str,
@@ -393,15 +403,42 @@ async def build_relevant_response(
             )
 
     papers: list[dict[str, Any]] = []
+    effective_top_ks: dict[str, int] = {}
     for (paper, chunks), ranked in zip(prepared, ranked_per_paper):
         payload = _base_paper_payload(paper)
         if degraded:
             payload["warnings"].append("RERANKER_DEGRADED_TO_BM25")
+        eligible_ranked = [
+            item for item in ranked if item.score >= settings.reranker_min_score
+        ]
+        effective_top_k = _effective_top_k(
+            len(chunks),
+            minimum=settings.reranker_top_k_min,
+            cap=settings.reranker_top_k,
+            ratio=settings.reranker_top_k_ratio,
+        )
+        effective_top_ks[paper.docid] = min(effective_top_k, len(eligible_ranked))
+        _debug_stage(
+            settings,
+            "reranker.selection",
+            docid=paper.docid,
+            min_score=settings.reranker_min_score,
+            top_k_min=settings.reranker_top_k_min,
+            chunk_count=len(chunks),
+            ranked_count=len(ranked),
+            eligible_count=len(eligible_ranked),
+            effective_top_k=effective_top_ks[paper.docid],
+            rejected=[
+                {"index": item.index, "score": item.score}
+                for item in ranked
+                if item.score < settings.reranker_min_score
+            ],
+        )
         segments = _expand_and_merge(
             paper,
             chunks,
-            ranked,
-            top_k=settings.reranker_top_k,
+            eligible_ranked,
+            top_k=effective_top_k,
             neighbor_window=settings.reranker_neighbor_window,
         )
         if not segments:
@@ -428,6 +465,11 @@ async def build_relevant_response(
                 "provider": provider,
                 "model": model,
                 "top_k_per_paper": settings.reranker_top_k,
+                "top_k_cap": settings.reranker_top_k,
+                "top_k_min": settings.reranker_top_k_min,
+                "top_k_ratio": settings.reranker_top_k_ratio,
+                "effective_top_k_per_paper": effective_top_ks,
+                "min_score": settings.reranker_min_score,
                 "neighbor_window": settings.reranker_neighbor_window,
                 "degraded": degraded,
             },

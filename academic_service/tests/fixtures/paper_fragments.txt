@@ -74,3 +74,7 @@ Dominick LaCapra distinguishes loss from absence. Marianne Hirsch proposes postm
 
 ## Trauma and artworking
 Art can transmit traces of events without making the observer identical to the original witness.
+
+---
+$ISSN\,2522\text{-}9400$ # European Modern Studies Journal # # The Evolution and Impact of Reinforcement Learning in Modern Artificial Intelligence Gurunathan Sabapathy **Abstract.** Reinforcement learning is widely used in modern artificial intelligence.\n# # Introduction Reinforcement learning learns sequential decisions through interaction with an environment.\n# # Theoretical Foundations and Methodological Evolution Theoretical foundations use Markov decision processes, value functions, and policy optimization.\n# Table 1: Performance Variability and Efficiency Gains Across Reinforcement Learning Algorithms
+<html><meta charset="utf-8"><style>table tr th,td { border:1px solid; }</style><body><table><thead><tr><td>Algorithm Type</td><td>Performance Variation (%)</td><td>Efficiency Improvement (%)</td></tr></thead><tr><td>Value-based Methods (DQN)</td><td>25.0</td><td>15.7</td></tr><tr><td>Policy Gradient Methods (PPO)</td><td>40.0</td><td>18.3</td></tr></table></body></html>\n# # Practical Applications Across Industries Reinforcement learning is applied to healthcare, manufacturing, autonomous vehicles, and energy management.\n# # Conclusion Reinforcement learning remains useful while sample efficiency and reproducibility require further research.

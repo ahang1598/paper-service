@@ -66,6 +66,9 @@ YAML 采用嵌套结构，由 `app/config.py` 的 `_YAML_PATHS` 映射表展平�
 | `DOCID_SEARCH_URL` | docid 搜索服务 URL（默认在 YAML，可在此覆盖） |
 | `DOCID_SEARCH_AUTH_KEY` | docid 搜索服务 HMAC 鉴权密钥 —— **密钥** |
 | `RERANKER_PROVIDER` | relevant 检索供应商：`internal`（默认）/ `siliconflow` |
+| `RERANKER_MIN_SCORE` | 最低相关度，默认 `0.2`；低于门槛的 chunk 不返回 |
+| `RERANKER_TOP_K_MIN` | 动态 Top-K 最小值，默认 `5`；论文 chunk 或合格结果不足时取实际数量 |
+| `RERANKER_TOP_K_RATIO` | 动态 Top-K 比例，默认 `0.1`；实际值受最小值 5 和硬上限 8 约束 |
 | `SILICONFLOW_API_KEY` | SiliconFlow rerank API key —— **密钥** |
 | `INTERNAL_RERANK_SIGN_KEY` | 内网 GTE reranker HMAC 密钥 —— **密钥** |
 | `DEBUG_LOG_PAPER_PROCESSING` | 论文处理详细日志开关，默认 `false`；开启后包含全文、章节、chunk 与 reranker 业务入出参 |
@@ -174,7 +177,7 @@ python3 start_service.py --port 12135
 | `options.intent` | 行为 | 其它入参 |
 |---|---|---|
 | `fulltext`（默认） | 保持原 chunks 全文拼接，同时返回结构化 papers | 无 |
-| `relevant` | 章节解析 → chunk → 每篇独立 rerank Top 8 → 邻居 ±1 → 合并去重 | `options.question` 必填 |
+| `relevant` | 章节解析 → HTML 表格清洗 → chunk → 相关度过滤 → 动态 Top-K → 邻居 ±1 → 合并去重 | `options.question` 必填 |
 
 相关片段请求示例：
 
@@ -217,6 +220,19 @@ python3 start_service.py --port 12135
 提供章节路径、规范化全文字符区间、来源 chunk IDs、seed IDs 和相关分数。
 任一 reranker 批次失败时，整次请求统一降级 BM25，并在
 `processing.reranker.degraded` 与论文 warnings 中明确标记。
+reranker 与 BM25 的结果先经过 `min_score` 门槛；没有结果达到门槛时返回空
+segments 和 `NO_RELEVANT_CONTENT`，不会为了填满 Top-K 返回低相关内容。每篇论文的
+实际 Top-K 根据 chunk 数动态计算，并在 `effective_top_k_per_paper` 中返回：
+`min(chunk_count, 8, max(5, ceil(chunk_count × 0.1)))`。通过相关度门槛的结果不足
+计算值时只取实际合格数量，不使用低相关 chunk 补足。
+
+章节规范化会识别样例中的 `# #`、粘连章节标题、编号层级和异常 Markdown 标题。
+HTML 表格会清洗成 `[TABLE]`/`[/TABLE]` 包围的逐行纯文本，保留单元格内容，移除
+`html/style/body/table/tr/td/th` 标签，避免 token 切分落在 HTML 标签中间。
+
+Chunk 结尾按 `段落 \n\n > 完整句 .!?。！？ > 单换行 \n > 分号 ;； > token 硬切`
+选择。相同类型选择最接近目标 400 tokens 的位置，并允许向后延伸到硬上限 450；
+剩余内容不超过硬上限时整体作为尾 chunk。
 
 成功响应：
 
@@ -380,7 +396,7 @@ RUN_SILICONFLOW_TESTS=1 PYTHONPATH="$(dirname "$(pwd)")" \
 
 | 目录 | 覆盖 |
 |---|---|
-| `tests/unit/` | 固定签名、配置、全文规范化、7 类论文片段、章节/chunk 不变量、reranker、BM25、邻居合并去重 |
+| `tests/unit/` | 固定签名、配置、全文规范化、8 类论文片段、章节/chunk/HTML 表格不变量、相关度门槛、动态 Top-K、reranker、BM25、邻居合并去重 |
 | `tests/upstream/` | 下游 8 场景：成功 / 多次 pending / 解析失败 / 业务错误 / 非法 JSON / HTTP 错误 / 网络重试 / 重签名 / pending 超时 |
 | `tests/api/` | 鉴权、错误状态、docid fulltext/relevant、结构化 papers、部分成功 |
 | `tests/ws/` | 事件顺序、relevant 处理阶段、HTTP/WS 结果一致性、BUSY、断开取消 |

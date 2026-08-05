@@ -19,6 +19,7 @@ YAML 采用嵌套结构（可读性），由 ``_YAML_PATHS`` 映射表展平为 
 
 from __future__ import annotations
 
+import math
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -81,6 +82,9 @@ _YAML_PATHS: Dict[str, Tuple[str, ...]] = {
     # reranker 公共配置
     "reranker_provider": ("reranker", "provider"),
     "reranker_top_k": ("reranker", "top_k"),
+    "reranker_top_k_min": ("reranker", "top_k_min"),
+    "reranker_top_k_ratio": ("reranker", "top_k_ratio"),
+    "reranker_min_score": ("reranker", "min_score"),
     "reranker_neighbor_window": ("reranker", "neighbor_window"),
     "reranker_batch_size": ("reranker", "batch_size"),
     "reranker_max_concurrency": ("reranker", "max_concurrency"),
@@ -295,6 +299,11 @@ class Settings(BaseSettings):
     # ---- reranker ----
     reranker_provider: str = "internal"
     reranker_top_k: int = 8
+    # 每篇实际 Top-K = min(chunk_count, top_k, max(top_k_min, ceil(chunk_count * top_k_ratio)))。
+    reranker_top_k_min: int = 5
+    reranker_top_k_ratio: float = 0.1
+    # 低于门槛的 reranker/BM25 结果不作为 seed。
+    reranker_min_score: float = 0.2
     reranker_neighbor_window: int = 1
     reranker_batch_size: int = 32
     reranker_max_concurrency: int = 3
@@ -349,6 +358,7 @@ class Settings(BaseSettings):
         "paper_chunk_target_tokens",
         "paper_chunk_max_tokens",
         "reranker_top_k",
+        "reranker_top_k_min",
         "reranker_batch_size",
         "reranker_max_concurrency",
         "reranker_max_retries",
@@ -374,12 +384,28 @@ class Settings(BaseSettings):
             raise ValueError("reranker_provider 必须为 internal 或 siliconflow")
         return normalized
 
+    @field_validator("reranker_top_k_ratio")
+    @classmethod
+    def _check_top_k_ratio(cls, v: float) -> float:
+        if not math.isfinite(v) or v <= 0 or v > 1:
+            raise ValueError("reranker_top_k_ratio 必须在 (0, 1] 范围内")
+        return v
+
+    @field_validator("reranker_min_score")
+    @classmethod
+    def _check_min_score(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("reranker_min_score 必须为有限数值")
+        return v
+
     @model_validator(mode="after")
     def _check_chunk_limits(self) -> "Settings":
         if self.paper_chunk_max_tokens < self.paper_chunk_target_tokens:
             raise ValueError("paper_chunk_max_tokens 不能小于 target_tokens")
         if self.paper_chunk_overlap_tokens >= self.paper_chunk_target_tokens:
             raise ValueError("paper_chunk_overlap_tokens 必须小于 target_tokens")
+        if self.reranker_top_k_min > self.reranker_top_k:
+            raise ValueError("reranker_top_k_min 不能大于 reranker_top_k")
         return self
 
     @property
