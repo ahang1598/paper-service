@@ -35,7 +35,17 @@ def _configure_logging(settings: Settings) -> None:
     """配置脱敏日志：把已知 token / 密钥原值作为兜底替换子串。"""
     level = getattr(logging, str(settings.log_level).upper(), logging.INFO)
     secret_substrings: tuple[str, ...] = tuple(
-        t for t in (settings.bearer_tokens + [settings.doc_service_auth_key]) if t
+        t
+        for t in (
+            settings.bearer_tokens
+            + [
+                settings.doc_service_auth_key,
+                settings.docid_search_auth_key,
+                settings.siliconflow_api_key,
+                settings.internal_rerank_sign_key,
+            ]
+        )
+        if t
     )
     configure_redacting_logger(secret_substrings=secret_substrings, level=level)
 

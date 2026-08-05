@@ -45,6 +45,7 @@ def test_yaml_paths_cover_all_settings_fields():
         "doc_connect_timeout_sec", "doc_read_timeout_sec", "doc_retry_backoff_sec",
         "doc_fulltext_url_path", "doc_auth_timestamp_tolerance_ms",
         "request_id_prefix",
+        "debug_log_paper_processing",
     }
     assert must_have <= set(_YAML_PATHS)
 
@@ -189,6 +190,12 @@ def test_bearer_tokens_env_string_still_works(monkeypatch):
     s = Settings(_env_file=None)
     assert s.api_bearer_tokens == "x,y,z"
     assert s.bearer_tokens == ["x", "y", "z"]
+
+
+def test_paper_processing_debug_log_switch_can_be_enabled_by_env(monkeypatch):
+    monkeypatch.setenv("DEBUG_LOG_PAPER_PROCESSING", "true")
+    s = Settings(_env_file=None)
+    assert s.debug_log_paper_processing is True
 
 
 # =====================================================================

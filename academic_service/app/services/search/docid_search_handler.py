@@ -28,7 +28,15 @@ from academic_service.app.core.exceptions import (
     UpstreamUnavailableError,
 )
 from academic_service.app.core.registry import BaseQueryHandler, HandlerContext, register
-from academic_service.app.schemas.navigator import DocidSearchParams
+from academic_service.app.core.registry import Event
+from academic_service.app.schemas.navigator import (
+    DOCID_INTENT_RELEVANT,
+    DocidSearchParams,
+)
+from academic_service.app.services.paper.pipeline import (
+    build_fulltext_response,
+    build_relevant_response,
+)
 
 logger = logging.getLogger("paper-service.handler.docid_search")
 
@@ -64,16 +72,48 @@ class DocidSearchHandler(BaseQueryHandler):
             raise UpstreamUnavailableError("下游 client 未配置")
         return client
 
-    async def execute(self, params: DocidSearchParams, ctx: HandlerContext) -> dict[str, Any]:
-        """一次性查询，返回 ``{"results": <拼接字符串>}``。"""
+    async def _fetch_documents(self, params: DocidSearchParams, ctx: HandlerContext):
         client = self._get_client(ctx)
         docids = params.docids
 
-        def _run() -> str:
-            return client.fetch(docids, ctx.request_id)
+        def _run():
+            return client.fetch_documents(docids, ctx.request_id)
 
         try:
-            results = await asyncio.to_thread(_run)
+            return await asyncio.to_thread(_run)
         except Exception as exc:
             raise _convert_client_exception(exc) from exc
-        return {"results": results}
+
+    async def execute(self, params: DocidSearchParams, ctx: HandlerContext) -> dict[str, Any]:
+        """按 fulltext/relevant 意图返回兼容和结构化论文数据。"""
+        documents = await self._fetch_documents(params, ctx)
+        if ctx.settings is None:
+            raise UpstreamUnavailableError("论文处理 settings 未配置")
+        if params.intent == DOCID_INTENT_RELEVANT:
+            return await build_relevant_response(
+                documents,
+                params.question or "",
+                ctx.settings,
+            )
+        return build_fulltext_response(documents, ctx.settings)
+
+    async def stream(self, params: DocidSearchParams, ctx: HandlerContext):
+        """WS 阶段进度；最终 data 与 HTTP execute 保持一致。"""
+        yield Event({"type": "progress", "message": "started"})
+        if params.intent == DOCID_INTENT_RELEVANT:
+            yield Event({"type": "progress", "message": "fetching"})
+        documents = await self._fetch_documents(params, ctx)
+        if ctx.settings is None:
+            raise UpstreamUnavailableError("论文处理 settings 未配置")
+        if params.intent == DOCID_INTENT_RELEVANT:
+            yield Event({"type": "progress", "message": "parsing"})
+            yield Event({"type": "progress", "message": "reranking"})
+            data = await build_relevant_response(
+                documents,
+                params.question or "",
+                ctx.settings,
+            )
+            yield Event({"type": "progress", "message": "merging"})
+        else:
+            data = build_fulltext_response(documents, ctx.settings)
+        yield Event({"type": "done", "data": data})

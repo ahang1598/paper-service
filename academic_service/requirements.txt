@@ -10,6 +10,7 @@ pydantic>=2.6.0
 pydantic-settings>=2.2.0
 pyyaml>=6.0
 requests>=2.31.0
+tokenizers>=0.19.0
 
 # ---- 测试依赖（开发 / CI）----
 pytest>=8.0.0

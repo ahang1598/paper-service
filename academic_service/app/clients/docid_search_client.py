@@ -118,6 +118,22 @@ class DocidSearchConfig:
     auth_key: str = field(default_factory=lambda: load_base_defaults()["docid_search_auth_key"])
 
 
+@dataclass(frozen=True)
+class DocidSearchDocument:
+    """下游单篇论文的结构化结果。
+
+    ``chunks`` 保留下游原始顺序；``metadata`` 只保存可安全回传的论文属性，
+    不包含下游排序调试字段或原始大对象。
+    """
+
+    docid: str
+    title: str
+    chunks: List[str]
+    metadata: Dict[str, Any]
+    status: str = "ok"
+    warnings: tuple[str, ...] = ()
+
+
 # =====================================================================
 # 纯函数：query 拼接 / 请求体构建 / 签名 / 结果拼接
 # =====================================================================
@@ -210,6 +226,92 @@ def _extract_chunks(item: Dict[str, Any]) -> Optional[List[str]]:
         return None
 
 
+def _extract_metadata(item: Dict[str, Any]) -> Dict[str, Any]:
+    """提取适合公共响应的基础论文元数据。
+
+    真实响应中的 ``meta_data`` 通常是 JSON 字符串；顶层与 extrainfo
+    字段同时存在时，语义更明确的 meta_data 优先。
+    """
+    extrainfo = _as_dict(item.get(FIELD_EXTRAINFO))
+    meta_data = _as_dict(extrainfo.get(FIELD_META_DATA))
+    metadata: Dict[str, Any] = {}
+
+    sources = (item, extrainfo, meta_data)
+    aliases = {
+        "url": ("url",),
+        "abstract": ("abstract", "desc", "rdesc"),
+        "author": ("author",),
+        "publisher": ("publisher",),
+        "journal": ("journal", "pJournal"),
+        "doi": ("doi",),
+        "publish_time": ("publish_time",),
+        "sitename": ("sitename",),
+        "lang": ("lang",),
+    }
+    for output_key, candidates in aliases.items():
+        value = None
+        # meta_data 应优先于 extrainfo 和顶层，因此反向遍历。
+        for source in reversed(sources):
+            for candidate in candidates:
+                if source.get(candidate) not in (None, ""):
+                    value = source[candidate]
+                    break
+            if value not in (None, ""):
+                break
+        if value not in (None, ""):
+            metadata[output_key] = value
+    return metadata
+
+
+def extract_documents(
+    results: Optional[List[Dict[str, Any]]],
+    requested_docids: Optional[List[str]] = None,
+) -> List[DocidSearchDocument]:
+    """将下游 results 转为结构化论文列表。
+
+    - 保留有元数据但 chunks 损坏的论文，并标为 ``no_content``；
+    - 按 docid（缺失时按 URL，再缺失时按结果位置）首次出现去重；
+    - 不在此处规范化或重新切分正文。
+    """
+    documents: List[DocidSearchDocument] = []
+    seen: set[str] = set()
+    for index, item in enumerate(results or []):
+        if not isinstance(item, dict):
+            continue
+        extrainfo = _as_dict(item.get(FIELD_EXTRAINFO))
+        meta_data = _as_dict(extrainfo.get(FIELD_META_DATA))
+        docid = str(
+            item.get("docid")
+            or extrainfo.get("docid")
+            or meta_data.get("docid")
+            or (
+                requested_docids[index]
+                if requested_docids is not None and index < len(requested_docids)
+                else ""
+            )
+            or ""
+        ).strip()
+        metadata = _extract_metadata(item)
+        identity = docid or str(metadata.get("url") or f"result:{index}")
+        if identity in seen:
+            continue
+        seen.add(identity)
+
+        chunks = _extract_chunks(item) or []
+        warnings: tuple[str, ...] = () if chunks else ("NO_VALID_CHUNKS",)
+        documents.append(
+            DocidSearchDocument(
+                docid=docid,
+                title=str(item.get(FIELD_TITLE) or item.get("rtitle") or ""),
+                chunks=chunks,
+                metadata=metadata,
+                status="ok" if chunks else "no_content",
+                warnings=warnings,
+            )
+        )
+    return documents
+
+
 def assemble_results(results: Optional[List[Dict[str, Any]]]) -> str:
     """把下游 results 拼接为 ``[i]title:..|||content:..`` 字符串。
 
@@ -299,3 +401,8 @@ class DocidSearchClient:
         """发起搜索并返回拼接后的 results 字符串。"""
         body = self.search(docids, logid)
         return assemble_results(body.get(FIELD_RESULTS) or [])
+
+    def fetch_documents(self, docids: List[str], logid: str) -> List[DocidSearchDocument]:
+        """发起搜索并返回结构化论文，供章节/chunk/rerank 流程使用。"""
+        body = self.search(docids, logid)
+        return extract_documents(body.get(FIELD_RESULTS) or [], requested_docids=docids)

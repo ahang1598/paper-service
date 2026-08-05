@@ -24,7 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -72,12 +72,40 @@ _YAML_PATHS: Dict[str, Tuple[str, ...]] = {
     # 下游 docid 搜索服务
     "docid_search_url": ("docid_search", "url"),
     "docid_search_auth_key": ("docid_search", "auth_key"),
+    # 论文解析 / chunk
+    "paper_chunk_target_tokens": ("paper_processing", "chunk_target_tokens"),
+    "paper_chunk_max_tokens": ("paper_processing", "chunk_max_tokens"),
+    "paper_chunk_overlap_tokens": ("paper_processing", "chunk_overlap_tokens"),
+    "paper_chunk_schema_version": ("paper_processing", "chunk_schema_version"),
+    "paper_tokenizer_path": ("paper_processing", "tokenizer_path"),
+    # reranker 公共配置
+    "reranker_provider": ("reranker", "provider"),
+    "reranker_top_k": ("reranker", "top_k"),
+    "reranker_neighbor_window": ("reranker", "neighbor_window"),
+    "reranker_batch_size": ("reranker", "batch_size"),
+    "reranker_max_concurrency": ("reranker", "max_concurrency"),
+    "reranker_max_retries": ("reranker", "max_retries"),
+    "reranker_retry_backoff_sec": ("reranker", "retry_backoff_sec"),
+    # SiliconFlow reranker
+    "siliconflow_rerank_url": ("reranker", "siliconflow", "url"),
+    "siliconflow_rerank_model": ("reranker", "siliconflow", "model"),
+    "siliconflow_api_key": ("reranker", "siliconflow", "api_key"),
+    "siliconflow_timeout_sec": ("reranker", "siliconflow", "timeout_sec"),
+    # 内网 GTE reranker
+    "internal_rerank_url": ("reranker", "internal", "url"),
+    "internal_rerank_app_id": ("reranker", "internal", "app_id"),
+    "internal_rerank_sign_key": ("reranker", "internal", "sign_key"),
+    "internal_rerank_bid": ("reranker", "internal", "bid"),
+    "internal_rerank_flow_id": ("reranker", "internal", "flow_id"),
+    "internal_rerank_uuid": ("reranker", "internal", "uuid"),
+    "internal_rerank_timeout_sec": ("reranker", "internal", "timeout_sec"),
     # request_id 前缀
     "request_id_prefix": ("request", "id_prefix"),
     # 调试日志开关
     "debug_log_request": ("debug", "log_request"),
     "debug_log_downstream_request": ("debug", "log_downstream_request"),
     "debug_log_downstream_response": ("debug", "log_downstream_response"),
+    "debug_log_paper_processing": ("debug", "log_paper_processing"),
 }
 
 
@@ -256,6 +284,38 @@ class Settings(BaseSettings):
     # HMAC 鉴权密钥（由服务方分配）。密钥：从环境变量注入，切勿写进 YAML。
     docid_search_auth_key: str = ""
 
+    # ---- 论文规范化 / chunk ----
+    paper_chunk_target_tokens: int = 400
+    paper_chunk_max_tokens: int = 450
+    paper_chunk_overlap_tokens: int = 60
+    paper_chunk_schema_version: str = "v1"
+    # 可选的 HuggingFace tokenizers tokenizer.json；为空时使用确定性多语言兜底计数器。
+    paper_tokenizer_path: str = ""
+
+    # ---- reranker ----
+    reranker_provider: str = "internal"
+    reranker_top_k: int = 8
+    reranker_neighbor_window: int = 1
+    reranker_batch_size: int = 32
+    reranker_max_concurrency: int = 3
+    reranker_max_retries: int = 3
+    reranker_retry_backoff_sec: float = 1.0
+
+    # SiliconFlow（API key 仅从环境变量/.env 注入）
+    siliconflow_rerank_url: str = "https://api.siliconflow.cn/v1/rerank"
+    siliconflow_rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    siliconflow_api_key: str = ""
+    siliconflow_timeout_sec: float = 60.0
+
+    # 内网 GTE（sign key 仅从环境变量/.env 注入）
+    internal_rerank_url: str = "http://10.33.111.223:8080/service"
+    internal_rerank_app_id: str = "lf_test"
+    internal_rerank_sign_key: str = ""
+    internal_rerank_bid: str = "gte_multilingual_reranker_base_torch"
+    internal_rerank_flow_id: str = "gte_multilingual_reranker_base_torch"
+    internal_rerank_uuid: str = "12344525"
+    internal_rerank_timeout_sec: float = 300.0
+
     # ---- 其它 ----
     # 服务端自动生成 request_id 时的前缀
     request_id_prefix: str = "srv"
@@ -267,6 +327,8 @@ class Settings(BaseSettings):
     debug_log_downstream_request: bool = False
     # 打印下游出参（响应体）—— 单独开关，响应可能很大
     debug_log_downstream_response: bool = False
+    # 打印论文全文解析、章节/chunk、reranker 入出参与合并结果；可能包含完整论文内容
+    debug_log_paper_processing: bool = False
 
     # ----- 值归一化 -----
     @field_validator("api_bearer_tokens", mode="before")
@@ -282,6 +344,43 @@ class Settings(BaseSettings):
     def _strip_tokens(cls, v: str) -> str:
         """容忍空白与多余逗号。"""
         return ",".join(t.strip() for t in v.split(",") if t.strip())
+
+    @field_validator(
+        "paper_chunk_target_tokens",
+        "paper_chunk_max_tokens",
+        "reranker_top_k",
+        "reranker_batch_size",
+        "reranker_max_concurrency",
+        "reranker_max_retries",
+    )
+    @classmethod
+    def _positive_processing_ints(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("论文处理与 reranker 的数量配置必须大于 0")
+        return v
+
+    @field_validator("paper_chunk_overlap_tokens", "reranker_neighbor_window")
+    @classmethod
+    def _non_negative_processing_ints(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("overlap 与 neighbor_window 不能为负数")
+        return v
+
+    @field_validator("reranker_provider")
+    @classmethod
+    def _check_reranker_provider(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if normalized not in {"internal", "siliconflow"}:
+            raise ValueError("reranker_provider 必须为 internal 或 siliconflow")
+        return normalized
+
+    @model_validator(mode="after")
+    def _check_chunk_limits(self) -> "Settings":
+        if self.paper_chunk_max_tokens < self.paper_chunk_target_tokens:
+            raise ValueError("paper_chunk_max_tokens 不能小于 target_tokens")
+        if self.paper_chunk_overlap_tokens >= self.paper_chunk_target_tokens:
+            raise ValueError("paper_chunk_overlap_tokens 必须小于 target_tokens")
+        return self
 
     @property
     def bearer_tokens(self) -> List[str]:

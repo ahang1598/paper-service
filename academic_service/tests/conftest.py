@@ -57,6 +57,10 @@ def make_settings(
         doc_poll_max_times=doc_poll_max_times,
         doc_poll_interval_sec=doc_poll_interval_sec,
         doc_max_retries=doc_max_retries,
+        reranker_provider="internal",
+        internal_rerank_sign_key="",
+        reranker_max_retries=1,
+        reranker_retry_backoff_sec=0.0,
     )
 
 
@@ -210,7 +214,7 @@ def fake_client_factory(fake_client: FakeDocClient) -> Callable[[], Any]:
 class FakeDocidClient:
     """可控的 docid 搜索 client 替身。
 
-    fetch(docids, logid) 按 script 返回拼接后的 results 字符串（用真实 assemble_results）。
+    fetch/fetch_documents 按 script 返回拼接字符串或结构化论文。
     记录每次调用的 docids/logid，便于断言路由与入参拼接。
     """
 
@@ -222,8 +226,7 @@ class FakeDocidClient:
         self.script = list(items)
         return self
 
-    def fetch(self, docids, logid: str) -> str:
-        from academic_service.app.clients.docid_search_client import assemble_results
+    def _consume(self, docids, logid: str):
         self.calls.append({"docids": list(docids), "logid": logid})
         if self.script:
             item = self.script.pop(0)
@@ -231,7 +234,17 @@ class FakeDocidClient:
             item = []
         if isinstance(item, Exception):
             raise item
+        return item
+
+    def fetch(self, docids, logid: str) -> str:
+        from academic_service.app.clients.docid_search_client import assemble_results
+        item = self._consume(docids, logid)
         return assemble_results(item)
+
+    def fetch_documents(self, docids, logid: str):
+        from academic_service.app.clients.docid_search_client import extract_documents
+        item = self._consume(docids, logid)
+        return extract_documents(item, requested_docids=list(docids))
 
 
 @pytest.fixture

@@ -39,8 +39,8 @@ from academic_service.app.schemas.navigator import (
     NavigatorQueryResponse,
     QUERY_TYPE_DOCID,
     QUERY_TYPE_FILEID,
-    effective_docids,
     extract_request_id,
+    translate_to_docid_params,
     translate_to_fulltext_params,
 )
 
@@ -127,7 +127,7 @@ async def query(
 
     # 3) 按类型做入参校验 + 转译 + 选择 client 工厂
     if req.type == QUERY_TYPE_DOCID:
-        params_dict = {"docids": effective_docids(req)}
+        params_dict = translate_to_docid_params(req)
         factory = docid_client_factory
     else:  # fileid
         if req.queries:

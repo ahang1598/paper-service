@@ -40,7 +40,7 @@ python3 -m venv .venv                                  # 创建虚拟环境
 
 ```bash
 cp .env.example .env
-# 编辑 .env，仅填入密钥（DOC_SERVICE_AUTH_KEY / API_BEARER_TOKENS）与 APP_ENV
+# 编辑 .env，仅填入密钥（包括 SILICONFLOW_API_KEY）与 APP_ENV
 ```
 
 #### YAML 配置（`configs/`）
@@ -65,9 +65,24 @@ YAML 采用嵌套结构，由 `app/config.py` 的 `_YAML_PATHS` 映射表展平�
 | `DOC_SERVICE_AUTH_KEY` | 下游 HMAC 鉴权密钥 —— **密钥** |
 | `DOCID_SEARCH_URL` | docid 搜索服务 URL（默认在 YAML，可在此覆盖） |
 | `DOCID_SEARCH_AUTH_KEY` | docid 搜索服务 HMAC 鉴权密钥 —— **密钥** |
+| `RERANKER_PROVIDER` | relevant 检索供应商：`internal`（默认）/ `siliconflow` |
+| `SILICONFLOW_API_KEY` | SiliconFlow rerank API key —— **密钥** |
+| `INTERNAL_RERANK_SIGN_KEY` | 内网 GTE reranker HMAC 密钥 —— **密钥** |
+| `DEBUG_LOG_PAPER_PROCESSING` | 论文处理详细日志开关，默认 `false`；开启后包含全文、章节、chunk 与 reranker 业务入出参 |
 | `DEFAULT_DEVICE_*` | 默认设备信息（请求级可覆盖，默认在 YAML） |
 
 > 任意 YAML 字段都可被同名环境变量覆盖（字段名不区分大小写）。
+
+论文处理日志使用独立开关，不要求把全局 `LOG_LEVEL` 改为 `DEBUG`：
+
+```bash
+DEBUG_LOG_PAPER_PROCESSING=true
+```
+
+开启后日志按 `stage=fulltext.input/parse.output/structure.output/chunk.output/`
+`reranker.input/reranker.output/merge.output` 标识各阶段，并额外记录实际 reranker
+provider 的请求 payload 和响应 body。日志不包含 API Key、签名或 Authorization 头，
+但会包含论文全文和问题，仅应在访问受控的调试环境短时开启。
 
 #### 优先级（低 → 高）
 
@@ -154,7 +169,27 @@ python3 start_service.py --port 12135
 }
 ```
 
-`docid` 成功响应（`results` 为拼接字符串：每篇 `[i]title:..|||content:..`，chunks 按 `\n` 拼接，多篇以 `\n` 分隔，损坏项跳过）：
+`docid` 支持两种论文数据意图，均通过 `options` 传递：
+
+| `options.intent` | 行为 | 其它入参 |
+|---|---|---|
+| `fulltext`（默认） | 保持原 chunks 全文拼接，同时返回结构化 papers | 无 |
+| `relevant` | 章节解析 → chunk → 每篇独立 rerank Top 8 → 邻居 ±1 → 合并去重 | `options.question` 必填 |
+
+相关片段请求示例：
+
+```json
+{
+  "queries": ["4309586360676299249", "7962161433555592055"],
+  "type": "docid",
+  "options": {
+    "intent": "relevant",
+    "question": "这些论文采用了哪些强化学习方法？"
+  }
+}
+```
+
+`docid` 成功响应保留兼容 `results`，并新增 `papers` 与 `processing`：
 
 ```json
 {
@@ -162,10 +197,26 @@ python3 start_service.py --port 12135
   "message": "success",
   "request_id": "srv_...",
   "data": {
-    "results": "[1]title:论文A|||content:第一段\n第二段\n[2]title:论文B|||content:摘要"
+    "results": "[1]title:论文A|||content:第一段\n第二段",
+    "papers": [
+      {
+        "docid": "4309586360676299249",
+        "title": "论文A",
+        "status": "ok",
+        "metadata": {},
+        "content": "第一段\n第二段",
+        "warnings": []
+      }
+    ],
+    "processing": {"intent": "fulltext", "chunk_schema_version": "v1"}
   }
 }
 ```
+
+`relevant` 时 `papers[].content` 替换为 `papers[].segments`；每个 segment
+提供章节路径、规范化全文字符区间、来源 chunk IDs、seed IDs 和相关分数。
+任一 reranker 批次失败时，整次请求统一降级 BM25，并在
+`processing.reranker.degraded` 与论文 warnings 中明确标记。
 
 成功响应：
 
@@ -315,20 +366,25 @@ def query(file_id: str, options: dict | None = None, stream: bool = False) -> di
 
 ```bash
 # 代码以 academic_service.app.* 为包根导入，需把项目父目录加入 PYTHONPATH
-PYTHONPATH="$(dirname "$(pwd)")" .venv/bin/pytest          # 运行全部 160 个测试
+PYTHONPATH="$(dirname "$(pwd)")" .venv/bin/pytest          # 默认测试（不访问 SiliconFlow）
 PYTHONPATH="$(dirname "$(pwd)")" .venv/bin/pytest -q       # 简洁输出
+
+# 显式运行真实 SiliconFlow reranker 测试（需 .env 中配置 API key）
+RUN_SILICONFLOW_TESTS=1 PYTHONPATH="$(dirname "$(pwd)")" \
+  .venv/bin/pytest -q -m siliconflow
 ```
 
 > 测试依赖已合入 `requirements.txt`，`.venv/bin/pip install -r requirements.txt` 会一并安装。pytest 配置位于 `pytest.ini`。
 
-测试分层（零真实网络，全部 mock）：
+默认测试分层（零真实网络，外部测试显式启用）：
 
 | 目录 | 覆盖 |
 |---|---|
-| `tests/unit/` | 固定签名向量、chunk 排序/缺失/重复、file_id/doc_hash、splitter 映射、非法页码、鉴权开/关、YAML 配置加载/优先级/叠加 |
+| `tests/unit/` | 固定签名、配置、全文规范化、7 类论文片段、章节/chunk 不变量、reranker、BM25、邻居合并去重 |
 | `tests/upstream/` | 下游 8 场景：成功 / 多次 pending / 解析失败 / 业务错误 / 非法 JSON / HTTP 错误 / 网络重试 / 重签名 / pending 超时 |
-| `tests/api/` | Bearer 鉴权、错误状态映射、request_id 透传/生成、健康检查、OpenAPI 模型 |
-| `tests/ws/` | 事件顺序、失败、同连接重复查询、进行中再提交 BUSY、断开取消、鉴权开/关 |
+| `tests/api/` | 鉴权、错误状态、docid fulltext/relevant、结构化 papers、部分成功 |
+| `tests/ws/` | 事件顺序、relevant 处理阶段、HTTP/WS 结果一致性、BUSY、断开取消 |
+| `tests/integration/` | 显式启用的真实 SiliconFlow 短片段 rerank 测试 |
 | `tests/test_acceptance.py` | HTTP/WS 同结果、并发不阻塞事件循环、日志不泄露密钥/全文 |
 
 ---

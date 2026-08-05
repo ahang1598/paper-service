@@ -1,0 +1,76 @@
+----
+# Inappropriate use of intravenous epinephrine leading to atrial fibrillation during prehospital anaphylaxis treatment: a case report\n\nHaewon Jung, Hyun Wook Ryoo, Jungbae Park\n\n## Abstract\n\nA 46-year-old man presented with severe anaphylactic symptoms. An additional intravenous bolus of epinephrine was administered and led to atrial fibrillation. Intravenous epinephrine is not typically recommended without continuous monitoring.\n\n## INTRODUCTION\n\nEpinephrine is a first-line drug for anaphylaxis, but concentrations above the therapeutic range can cause ventricular arrhythmias and myocardial infarction.\n\n## CASE REPORT\n\nThe patient developed atrial fibrillation after intravenous administration.
+
+---
+# Recent Advances in Indirect Pulp Treatment Materials for Primary Teeth: A Literature Review
+
+Afnan M Saber, Omar A El Meligy, Sumer M Alaki
+
+## Introduction
+
+Indirect pulp treatment preserves pulp vitality in primary molars.
+
+## Materials and Methods
+
+Papers published from 1995 to 2019 were selected from PubMed, ScienceDirect, and Scopus.
+
+## Review Results
+
+Thirty five papers discussed recent advances in indirect pulp treatment materials.
+
+## Discussion
+
+### Definition
+
+Materials include mineral trioxide aggregate (MTA), Biodentine, TheraCal-LC, calcium hydroxide, and resin-modified glass ionomer.
+
+---
+# Book Reviews
+
+# Ophthalmology and Diabetes
+
+Diabetes and the Eye. By F. I. Caird, A. Pirie, and T. G. Ramsell.
+
+The main part of the book is devoted to diabetic retinopathy. The clinical features, pathology, and treatment are reviewed.
+
+# Understanding Respiratory Problems
+
+Respiratory Failure. The book discusses clinical respiratory disorders and treatment.
+
+---
+# # 1 緒 言
+接合菌類 Mortierella isabellina の脂質生産性について培養条件を変えて検討した。培養日数、培養温度、培地の C/N 比、窒素源が脂質生産に影響した。
+
+# # 2 実験
+グルコースを炭素源として所定の温度と期間で振とう培養を行った。
+
+# # 3 結果と考察
+
+# # 3・1 培養日数による変化
+培養時間に対する菌体の増殖曲線、ステロール量及びスクアレン量を求めた。
+
+----
+#### Abstract
+We report the elastic properties of suspended multilayer WSe <sub>2</sub>. The Young's modulus was 167.3 ± 6.7 GPa and was statistically independent of membrane thickness.\n# # Elastic properties of suspended multilayer WSe$_{2}$\n# Rui Zhang, Vasileios Koutsos, and Rebecca Cheung\nCitation: Appl. Phys. Lett. **108**, 042104 (2016).\n# Articles you may be interested in\nAir stable n-doping of WSe2 by silicon nitride thin films.\n\n# # Elastic properties of suspended multilayer WSe$_{2}$\nThe membranes can endure approximately 12.4 GPa stress and 7.3% strain without fracture. The expression $E = \\sigma / \\epsilon$ is retained as a formula.
+
+---
+# Trace Element Analysis and Occurrence in Foodstuffs
+
+The phrase “Contains several important trace elements” is common in food descriptions. Trace element concentrations depend on sampling, preparation, and analytical technique.
+
+The available fragment ends before the expected methods and conclusion sections, so the missing structure must not be inferred.
+
+---
+### Abstract
+**Wound – Proximity – Nonmemory. Psychoanalytically Grounded Trauma Discourse from Freud to Ettinger**
+
+Trauma in psychoanalytic theory concerns memory, repetition, testimony, and the relation between subject and witness. Fragmented OCR may remove Polish diacritics: pamiec, swiadectwo, doswiadczenie.
+
+## Freud and repetition
+The discussion introduces Nachträglichkeit and the return of traumatic memory through repetition.
+
+## Testimony after the Holocaust
+Dominick LaCapra distinguishes loss from absence. Marianne Hirsch proposes postmemory as a structure of transmission between generations. Dense references such as 32, 33, 34 and damaged words must not crash parsing.
+
+## Trauma and artworking
+Art can transmit traces of events without making the observer identical to the original witness.

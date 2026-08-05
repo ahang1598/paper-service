@@ -12,6 +12,7 @@ from academic_service.app.clients.docid_search_client import (
     assemble_results,
     build_query,
     build_search_body,
+    extract_documents,
     sign_request,
 )
 
@@ -181,4 +182,32 @@ def test_assemble_real_response_fixture():
     assert "Reinforcement Learning Enhanced LLMs: A Survey" in titles
     assert "The Evolution and Impact of Reinforcement Learning in Modern Artificial Intelligence" in titles
 
+
+def test_extract_documents_keeps_metadata_and_marks_invalid_chunks():
+    import json
+
+    results = [
+        {
+            "docid": "d1",
+            "title": "Good",
+            "url": "https://example.test/paper",
+            "extrainfo": {
+                "chunks": json.dumps(["a", "b"]),
+                "meta_data": json.dumps({
+                    "author": "A;B",
+                    "doi": "10.test/x",
+                    "abstract": "summary",
+                }),
+            },
+        },
+        {"docid": "d2", "title": "Broken", "extrainfo": {"chunks": "not-json"}},
+        {"docid": "d1", "title": "Duplicate", "extrainfo": {"chunks": '["x"]'}},
+    ]
+    documents = extract_documents(results)
+    assert [document.docid for document in documents] == ["d1", "d2"]
+    assert documents[0].chunks == ["a", "b"]
+    assert documents[0].metadata["doi"] == "10.test/x"
+    assert documents[0].metadata["url"] == "https://example.test/paper"
+    assert documents[1].status == "no_content"
+    assert documents[1].warnings == ("NO_VALID_CHUNKS",)
 

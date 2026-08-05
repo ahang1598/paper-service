@@ -35,6 +35,7 @@ from academic_service.app.core.registry import HandlerContext, get_handler_class
 from academic_service.app.core.security import verify_token
 from academic_service.app.schemas.navigator import (
     ALLOWED_QUERY_TYPES,
+    DOCID_INTENT_FULLTEXT,
     QUERY_TYPE_DOCID,
     QUERY_TYPE_FILEID,
 )
@@ -121,7 +122,12 @@ async def ws_query(
                     "message": "docid 模式需要 query 或 queries", "request_id": request_id,
                 })
                 return
-            params_dict = {"docids": docids}
+            options = raw.get("options") or {}
+            params_dict = {
+                "docids": docids,
+                "intent": options.get("intent", DOCID_INTENT_FULLTEXT),
+                "question": options.get("question"),
+            }
             factory = docid_client_factory
         else:  # fileid
             query = raw.get("query")

@@ -55,3 +55,55 @@ def test_ws_default_type_is_fileid(client, fake_client, fake_docid_client):
                 break
         assert any(e["type"] == "done" for e in events)
     assert fake_docid_client.calls == []
+
+
+def test_ws_docid_relevant_reports_processing_stages(client, fake_docid_client):
+    fake_docid_client.set_script([
+        {
+            "docid": "d1",
+            "title": "T",
+            "extrainfo": {"chunks": '["## Method\\n\\nTARGET method evidence and result."]'},
+        }
+    ])
+    with client.websocket_connect("/api/v1/navigator/ws") as ws:
+        ws.send_json({
+            "query": "d1",
+            "type": "docid",
+            "options": {"intent": "relevant", "question": "TARGET method"},
+        })
+        events = []
+        for _ in range(10):
+            event = ws.receive_json()
+            events.append(event)
+            if event.get("type") == "done":
+                break
+    progress = [event["message"] for event in events if event["type"] == "progress"]
+    assert progress == ["started", "fetching", "parsing", "reranking", "merging"]
+    done = next(event for event in events if event["type"] == "done")
+    assert done["data"]["processing"]["intent"] == "relevant"
+    assert done["data"]["papers"][0]["segments"]
+
+
+def test_http_and_ws_docid_relevant_final_data_match(client, fake_docid_client):
+    result = {
+        "docid": "d1",
+        "title": "T",
+        "extrainfo": {"chunks": '["## Method\\n\\nTARGET method evidence and result."]'},
+    }
+    payload = {
+        "query": "d1",
+        "type": "docid",
+        "options": {"intent": "relevant", "question": "TARGET method"},
+    }
+    fake_docid_client.set_script([result])
+    http_data = client.post("/api/v1/navigator/query", json=payload).json()["data"]
+
+    fake_docid_client.set_script([result])
+    with client.websocket_connect("/api/v1/navigator/ws") as ws:
+        ws.send_json(payload)
+        while True:
+            event = ws.receive_json()
+            if event.get("type") == "done":
+                ws_data = event["data"]
+                break
+    assert ws_data == http_data

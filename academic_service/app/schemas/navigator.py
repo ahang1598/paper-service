@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -35,6 +35,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 QUERY_TYPE_FILEID = "fileid"
 QUERY_TYPE_DOCID = "docid"
 ALLOWED_QUERY_TYPES: frozenset[str] = frozenset({QUERY_TYPE_FILEID, QUERY_TYPE_DOCID})
+
+# ---- docid 数据意图 ----
+DOCID_INTENT_FULLTEXT = "fulltext"
+DOCID_INTENT_RELEVANT = "relevant"
+ALLOWED_DOCID_INTENTS: frozenset[str] = frozenset(
+    {DOCID_INTENT_FULLTEXT, DOCID_INTENT_RELEVANT}
+)
 
 
 # options 内允许出现的键（用于向调用方提示，不做强制枚举校验，
@@ -47,6 +54,8 @@ ALLOWED_OPTION_KEYS: frozenset[str] = frozenset(
         "doc_hash",
         "device",
         "request_id",
+        "intent",
+        "question",
     }
 )
 
@@ -58,7 +67,7 @@ class NavigatorQueryRequest(BaseModel):
         query: 单个 id。fileid 模式为文件ID；docid 模式为单个 docid（与 queries 二选一）。
         queries: docid 列表（仅 docid 模式；fileid 模式不允许，由端点拒绝）。
         type: 查询类型路由——``fileid``（默认，doc_fulltext）/ ``docid``（搜索服务）。
-        options: fileid 模式的可选参数覆盖项（splitter/pages/with_rect/doc_hash/device/request_id）。
+        options: fileid 参数覆盖，或 docid 的 intent/question。
         stream: ``False``（默认）HTTP 同步返回；``True`` 时应改用 WebSocket。
     """
 
@@ -67,7 +76,10 @@ class NavigatorQueryRequest(BaseModel):
     type: str = Field(default=QUERY_TYPE_FILEID, description="查询类型：fileid(默认,doc_fulltext) / docid(搜索)")
     options: dict[str, Any] = Field(
         default_factory=dict,
-        description="fileid 模式可选覆盖项（splitter/pages/with_rect/doc_hash/device/request_id）",
+        description=(
+            "fileid 覆盖项（splitter/pages/with_rect/doc_hash/device/request_id），"
+            "或 docid 论文意图（intent=fulltext|relevant、question）"
+        ),
     )
     stream: bool = Field(
         default=False,
@@ -141,11 +153,44 @@ class DocidSearchParams(BaseModel):
     """docid 搜索 handler 的 action 专属参数。"""
 
     docids: List[str] = Field(..., description="docid 列表，至少一个")
+    intent: Literal["fulltext", "relevant"] = Field(
+        default=DOCID_INTENT_FULLTEXT,
+        description="论文数据意图：fulltext(默认) / relevant",
+    )
+    question: Optional[str] = Field(
+        default=None,
+        description="relevant 意图的检索问题",
+    )
 
     @field_validator("docids")
     @classmethod
     def _check_docids(cls, v: List[str]) -> List[str]:
-        cleaned = [x.strip() for x in v if isinstance(x, str) and x.strip()]
+        # 去空白并按首次出现去重，避免向下游重复请求同一篇论文。
+        cleaned = list(dict.fromkeys(
+            x.strip() for x in v if isinstance(x, str) and x.strip()
+        ))
         if not cleaned:
             raise ValueError("docids 至少需要一个非空值")
         return cleaned
+
+    @model_validator(mode="after")
+    def _check_relevant_question(self) -> "DocidSearchParams":
+        if self.question is not None:
+            self.question = self.question.strip() or None
+        if self.intent == DOCID_INTENT_RELEVANT and not self.question:
+            raise ValueError("relevant 意图必须提供非空 question")
+        return self
+
+
+def translate_to_docid_params(req: NavigatorQueryRequest) -> dict[str, Any]:
+    """把 navigator 信封转译为 ``DocidSearchParams`` 可消费的字典。
+
+    ``query/queries`` 继续只表示 docid；自然语言问题只从 options.question
+    读取，避免改变单 docid 调用的既有语义。
+    """
+    options = req.options or {}
+    return {
+        "docids": effective_docids(req),
+        "intent": options.get("intent", DOCID_INTENT_FULLTEXT),
+        "question": options.get("question"),
+    }

@@ -53,6 +53,37 @@ docid_search:
   url: "http://10.37.0.140:6107/search"        # 搜索服务完整 URL（path 参与签名）
   auth_key: ""                                 # 密钥：环境变量 DOCID_SEARCH_AUTH_KEY 注入，切勿在此填真实值
 
+# ---- docid 论文数据处理 ----
+paper_processing:
+  chunk_target_tokens: 400
+  chunk_max_tokens: 450
+  chunk_overlap_tokens: 60
+  chunk_schema_version: "v1"
+  tokenizer_path: ""                           # 可选 tokenizer.json；为空使用确定性多语言兜底计数器
+
+# ---- docid relevant reranker ----
+reranker:
+  provider: internal                            # internal / siliconflow
+  top_k: 8                                      # 每篇论文独立 top-k
+  neighbor_window: 1                            # seed 同章节前后邻居数
+  batch_size: 32
+  max_concurrency: 3
+  max_retries: 3
+  retry_backoff_sec: 1.0
+  siliconflow:
+    url: "https://api.siliconflow.cn/v1/rerank"
+    model: "BAAI/bge-reranker-v2-m3"
+    api_key: ""                                 # 密钥：SILICONFLOW_API_KEY 注入
+    timeout_sec: 60
+  internal:
+    url: "http://10.33.111.223:8080/service"
+    app_id: "lf_test"
+    sign_key: ""                                # 密钥：INTERNAL_RERANK_SIGN_KEY 注入
+    bid: "gte_multilingual_reranker_base_torch"
+    flow_id: "gte_multilingual_reranker_base_torch"
+    uuid: "12344525"
+    timeout_sec: 300
+
 # ---- 其它 ----
 request:
   id_prefix: "srv"           # 服务端自动生成 request_id 时的前缀
@@ -62,3 +93,4 @@ debug:
   log_request: false              # 打印进入服务的请求入参（HTTP/WS 请求体）
   log_downstream_request: false   # 打印访问下游（全文获取）时的入参（url + body，不含鉴权头）
   log_downstream_response: false  # 打印下游出参（响应体）——单独开关，响应可能很大
+  log_paper_processing: false     # 打印全文解析、章节/chunk、reranker 入出参与合并结果（包含论文内容）
