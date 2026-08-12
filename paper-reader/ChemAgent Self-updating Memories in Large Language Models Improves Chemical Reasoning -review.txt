@@ -1,0 +1,151 @@
+Reviewer1
+Summary:
+The paper introduces a novel framework named ChemAgent designed to enhance the performance of large language models (LLMs) in complex chemical reasoning tasks. This framework overcomes the typical limitations faced by LLMs in accurately handling domain-specific formulas and reasoning steps.
+
+Key contributions of the paper include:
+
+Dynamic Library System: ChemAgent incorporates a self-updating "library" system that decomposes complex chemical problems into sub-tasks, storing these alongside their solutions for future reference. This approach allows the system to retrieve and refine relevant information when tackling new problems.
+Memory Components: The framework introduces three types of memory:
+Planning Memory for high-level strategies.
+Execution Memory for detailed problem-solving steps.
+Knowledge Memory for basic chemistry principles.
+Iterative Problem Solving: ChemAgent's iterative learning enables LLMs to improve their accuracy over time, enhancing performance through experience.
+Performance Gains: The framework demonstrated up to a 46% improvement in chemical reasoning accuracy on SciBench datasets, significantly outperforming existing methods such as StructChem.
+The authors conclude that ChemAgent holds promise for applications in fields like drug discovery and materials science, and they provide their code for further research and development.
+
+Soundness: 2: fair
+Presentation: 2: fair
+Contribution: 2: fair
+Strengths:
+Self-updating dynamic memory library system: ChemAgent improves the chemical reasoning capabilities of large language models (LLM) by introducing a self-updating "library" system. The library improves reasoning and solution accuracy by decomposing complex chemical problems into subtasks and storing these tasks and corresponding solutions in memory components, allowing models to retrieve and leverage the past when solving new problems.
+
+Performance improvement: Experimental results show that ChemAgent achieves up to 46% performance improvement in chemical reasoning tasks on the SciBench dataset, significantly outperforming existing solutions such as StructChem. Especially when using more powerful models such as GPT-4, ChemAgent has demonstrated the ability to continuously learn and improve through its memory system and evaluation improvement module.
+
+Weaknesses:
+Clarification of Innovation and Contribution: ChemAgent introduces a dynamic memory updating mechanism, which, while innovative, relies on existing techniques and frameworks, such as prompt engineering and the combination of pre-trained models, to enhance the performance of large language models (LLMs). While the self-improvement capabilities of the dynamic library system are noteworthy, the approach depends primarily on prompt design to manage LLM interactions and context retrieval, an area that has been extensively explored. Therefore, we suggest authors further emphasize the distinctiveness and novelty of ChemAgent’s integration of prompt design and memory modules to help better differentiate its contributions from existing works.
+Generalizability and Comprehensiveness of Experimental Evaluation: While the SciBench dataset provides a rigorous benchmark for evaluation, the current experiments are focused on specific chemical reasoning tasks. Expanding the validation to include more diverse datasets or real-world scenarios like optimization of chemical experiment parameters would strengthen the argument for ChemAgent's broader applicability. We recommend considering a wider range of more challenging evaluation tasks in future work to comprehensively assess the system's performance across a variety of chemical or scientific problems.
+Questions:
+Clarification of Innovation and Contribution
+Questions:
+
+Could the authors provide a more detailed explanation of how ChemAgent’s integration of dynamic memory updating and prompt engineering differs from existing approaches? Specifically, how does ChemAgent’s memory updating mechanism contribute novel insights or advancements in the field of LLMs, beyond the well-explored techniques of prompt design and memory retrieval?
+Could the authors elaborate on any unique aspects of ChemAgent's architecture or framework that differentiate it from similar systems in the literature? Are there any specific design choices made to optimize memory retrieval or self-improvement that haven’t been widely explored in other works?
+Suggestions:
+
+We suggest that the authors further emphasize the novelty of ChemAgent's integration of prompt design and memory modules. A comparison to existing memory-enhanced models in the LLM space could help highlight ChemAgent’s unique contribution.
+We recommend that the authors provide a more thorough description of how the dynamic memory updating mechanism operates in real-time and how it evolves through interactions. This would help clarify the distinction between ChemAgent and previous works focused on prompt engineering or static memory updates.
+Generalizability and Comprehensiveness of Experimental Evaluation
+Questions:
+
+While the use of the SciBench dataset is commendable, could the authors clarify if the results obtained are robust across a wider range of chemical tasks? Have the authors considered evaluating ChemAgent on real-world chemical challenging reasoning tasks, such as optimizing experimental parameters or suggesting experimental protocols?
+How does ChemAgent perform when applied to more complex, interdisciplinary problems, such as tasks that require domain-specific knowledge integration (e.g., chemical engineering or materials science)?
+Suggestions:
+
+We suggest that the authors expand the experimental evaluation to include a broader range of datasets, including those that involve real-world scientific challenges. This would provide a clearer picture of the system's generalizability and its potential for application in diverse chemical and scientific domains.
+We recommend that the authors explore performance on tasks with varying levels of difficulty, such as those requiring multi-step reasoning or integration of data from multiple sources, to better assess ChemAgent's capabilities across different domains.
+Flag For Ethics Review: No ethics review needed.
+Rating: 5: marginally below the acceptance threshold
+Confidence: 4: You are confident in your assessment, but not absolutely certain. It is unlikely, but not impossible, that you did not understand some parts of the submission or that you are unfamiliar with some pieces of related work.
+Code Of Conduct: Yes
+
+
+-----
+Reviewer2
+Summary:
+The paper presents ChemAgent, a framework that enhances large language models (LLMs) in chemical reasoning tasks by dynamically self-updating memory library. The library is designed to retain knowledge and improve task performance over time by decomposing complex problems into smaller sub-tasks, storing solutions, and enabling efficient retrieval for future similar tasks. ChemAgent incorporates three types of memory: Planning Memory for high-level strategies, Execution Memory for specific solutions, and Knowledge Memory for core chemistry principles. Experimental results on four datasets from SciBench demonstrate that ChemAgent outperforms baselines, particularly in complex chemistry tasks.
+
+Soundness: 3: good
+Presentation: 2: fair
+Contribution: 2: fair
+Strengths:
+The three-part memory system (Planning, Execution, Knowledge) effectively models how LLMs can incrementally improve through task decomposition and retrieval. This approach emulates human memory retrieval, making it highly applicable to chemistry, where multi-step reasoning and recall of specific formulas or constants are frequently required.
+The experimental setup provides a solid justification for the additional memory components, clearly demonstrating the benefits of enhanced recall and problem-solving.
+Weaknesses:
+As the library expands, retrieval efficiency and memory management may become bottlenecks. The framework’s performance could be compromised in environments with frequent memory updates and large datasets, highlighting a need for memory pruning or optimization strategies.
+More implementation details about the memory architecture would be beneficial, especially regarding the memory sizes and updating mechanisms. An analysis of the relative sizes of each memory type (Planning, Execution, Knowledge) would be insightful.
+Questions:
+How does ChemAgent handle potential memory overflow? Is there a mechanism to dynamically optimize memory usage?
+Follow up on W2, what are the sizes of each memory module, and do they vary by type? If so, what are the considerations behind these differences?
+How long does it typically take to build a knowledge library that achieves reliable performance?
+Is there a mechanism to ensure the quality of data accumulated over time?
+Flag For Ethics Review: No ethics review needed.
+Rating: 6: marginally above the acceptance threshold
+Confidence: 4: You are confident in your assessment, but not absolutely certain. It is unlikely, but not impossible, that you did not understand some parts of the submission or that you are unfamiliar with some pieces of related work.
+Code Of Conduct: Yes
+
+
+-----
+Reviewer3
+Summary:
+The paper introduces a framework ChemAgent aimed at enhancing chemical reasoning capabilities in large language models through a self-updating dynamic library. ChemAgent leverages a memory-based library system that decomposes complex chemical tasks into sub-tasks, storing solutions for future reference. The authors evaluate ChemAgent on four chemical reasoning datasets from SciBench, demonstrating that it significantly outperforms previous approaches.
+
+Soundness: 3: good
+Presentation: 2: fair
+Contribution: 3: good
+Strengths:
+The overall contribution of RAG+LLM with the application for chemistry calculation, is a rather novel contribution as an application.
+This memory system, which includes planning, execution, and knowledge memory, is well-suited for tasks that require iterative problem-solving and cumulative knowledge retention.
+The authors evaluated ChemAgent across multiple datasets and models and provided extensive error analysis and ablation study.
+Weaknesses:
+The main experiments use only one dataset (Sci-bench), and actually only the chemistry subset of this dataset. Given that chemistry reasoning is such a large topic with many datasets available, I would expect experiments on more datasets. Otherwise, the authors need to clearly explain why the other datasets are not suitable. Even if it’s the case that this dataset offers a unique benefit (e.g.,chemistry-related calculation, with labels ), other parts of the experiments can be performed on other datasets as well to strengthen the analysis.
+
+While ChemAgent performs well against StructChem and other baselines, a direct comparison with more recent multi-modal or hybrid models (such as those integrating external tools like ChemCrow) would strengthen the case for ChemAgent’s utility across various LLM designs.[1]
+
+[1].ChemCrow: Augmenting large-language models with chemistry tools
+
+Questions:
+During the library construction phase, the definition of "condition" is unclear, what kind of condition is extracted, and what is the criterion of "refine"? The authors are encouraged to clarify with an example.
+
+Although the paper demonstrates strong performance in chemistry, how might the framework adapt to other scientific domains with similar reasoning demands, such as physics or computational biology? Are specific adjustments needed for these areas?
+
+The evaluation and refinement module plays a significant role in performance. Could the authors elaborate on any observed limitations in this module, especially regarding instances where errors are detected but not effectively corrected?
+
+How does ChemAgent compare with models that integrate external tools, such as ChemCrow, especially considering that code generation is employed to handle calculations in subtask answer generation? Are there established tools that could directly perform these calculations, and how do the authors assess the accuracy of the generated code?
+
+Flag For Ethics Review: No ethics review needed.
+Rating: 6: marginally above the acceptance threshold
+Confidence: 4: You are confident in your assessment, but not absolutely certain. It is unlikely, but not impossible, that you did not understand some parts of the submission or that you are unfamiliar with some pieces of related work.
+Code Of Conduct: Yes
+
+----
+Reviewer4
+Summary:
+The paper introduces ChemAgent, a method for improving LLMs reasoning in chemistry-related tasks based on the use of tsak decomposition and memory modules of three kinds. In particular, the authors implement a system with 3 kinds fo memory, namely knowledge memory Mk, plan memory Mp, and Execution memory Me, each of which plays a role in different parts of the pipeline. Mp is used to aid an LLM when decomposing a given task by providing it with previous plans used to solved other tasks. Mk is used to retrieve facts and other relevant things useful to tackle specific sub-tasks, and Me provides detailed solutions to similar problems. The evaluations are done mostly over the recently published SciBench benchmark. The authors perform multiple ablations to assess the effect of each component of the pipeline including each memory module, the LLM used, the effect of accumulating memores in Mp and Me. In addition, the papers presents comparisons with other SOTA methods and show that their method outperforms previous approaches.
+
+Soundness: 3: good
+Presentation: 2: fair
+Contribution: 3: good
+Strengths:
+The method builds up on other work (particularly StructChem), by recognizing where that approach fails and facilitating different modules to support the LLM during the reasoning process. Each memory module is designed to tackle an aspect which I find interesting, in particular the knowledge memory module (Mk) tackles the issue of bad recall of facts, such as constants, formulas, etc, preventing hallucinations of this type. Plan memory and execution memory both aid the LLM at the task of splitting tasks into relevant and actionable plans, based on previous experience. The evaluations show the strengths of the system and an array of ablations is performed to assess the influence of each module, and of the quality of each module, in the resulting performance. Evaluation of the effect of evolution in memory as the agent solves tasks (Section 3.3) is very interesting, and it's indeed an experiment that I was looking forward to seeing while reading the paper. It proves one of the main claims: that experience (through expansion of the memory modules) can improve the performance of the agent. The error analysis (Section 3.5) is very interesting and gives a lot of insight into where and why the agent fails at solving tasks. This is important for further developments as it gives an intuition on what parts need fixing or improving.
+
+Weaknesses:
+Notes on the field specific Agent
+there is nothing that makes the system chemistry-specific, other than the type of problems that are collected in its memory components. In fact, given the content of the paper I can imagine this system can be used for physics, maths (and thus evaluated in SciBench) or even extended to more general reasoning questions. In that sense, the relevance of this work can be improved by adding more extensive experiments on other fields outside of chemistry, as there is no chemistry-specific insight in the current formulation.
+
+On the other hand, given that this work focuses largely on the domain of chemistry, it would be good to see more work into chemistry-specific insights or inductive biases, inclusion of modalities (that for instance improve performance on understanding of molecules, reactions, results from analytical instruments), etc, that serve as an argument for why the focus is so strongly placed in chemistry. Again, this same system could perfectly be applied for physics or maths, however no evaluation shows this.
+
+Missing citations, ignoring several other works and benchmarks
+The concepts of "types of memory" is not new and, although the paper cites some relevant papers, it's missing a few that implement similar ideas on other domains, however the integration of all into this complete framework is new, and interesting approach to reasoning of LLMs. See the references given at the bottom [1-5], along with others that I didn't include here. There's even a whole review on memory mechanisms behind LLM Agents, that haven been cited here and that I find extremely relevant.
+Omission of other benchmarks: Given that the system is designed for chemistry-specific tasks, and given the low amount of benchmarks specific for chemical reasoning, it would be good to assess ChemAgent's performance on other benchmarks, such as ChemBench [7]
+For being so chemistry-specific, this work misses to cite foundational works that are related, such as [8-10] and others. [11] is only tangentially mentioned at the appendix as a related work. The paper in general misses such kind of extremely relevant references.
+Some important citations are only tangentially relevant. Particularly in line 048, for the statement "previous approaches in chemical reasoning tasks have focused on decomposing the reasoning process", none of the references cited are relevant. Feinberg 2018 (PotentialNet) is a method for molecular property prediction. Yao 2024 (TreeofThoughts) and Zhang 2023 (Automatic Chain of Thought Prompting) have nothing to do with chemical reasoning. Only Zhong 2023 is directly relevant to this statement.
+Writing
+Some parts of the paper could use rewriting for improving clarity, namely:
+
+line 044: unclear statement: llms struggle to (1) use formulas (2) exhibit incorrect steps. Should be llms (1) struggle to… (2) exhibit…
+line 052: It is mentioned that "previous methods rely on predefined templates", and cites self-consistency paper [12] as an example of that. Furthermore this is presented as an advantage of the current method over others, however: 1) ChemAgent also relies heavily on predefined prompts, and 2) self-consistency is a general methodology that considers multiple outputs from an LLM to yield the most prominent answer from multiple reasoning paths. In that sense, it's not clear what is understood by "pre-defined templates", and why this is a drawback of other methods that is somehow addressed in this work.
+In Table 1 it is very unclear where results come from, or how they have been calculated. Especially for the baselines with gpt4 (direct reasoning), these results mismatch those presented in the original paper for the benchmark. Only the results for “few-shot + python” have been taken from the original benchmakr paper. Further inspection indicates that the results reported for “Direct reasoning, GPT-4” have been directly taken from the StructChem paper [13], however no explicit mention is made of this. Additionally, these results are taken from the row “Few shot setting - Direct reasoning” in Table 1 of [13], which is different from the described “Direct reasoning”. Please cite the specific sources for each of the results in the table.
+Missing ablations
+The evaluation and refinement module uses gpt-4, regardless of the LLM used as a base. It is critical to evaluate the effect of this design choice, as it's not clear how much gpt-4 as evaluator improves gpt-3.5's (or any other llm's) performance.
+[1] Zhang Y, Wang C, Qi J,Peng Y. Leave It to Large Language Models! Correction and Planning with Memory Integration. Cyborg Bionic Syst. 2024;5:Article 0087. https://doi.org/10.34133/cbsystems.0087 [2] Li, Kun, et al. "Vector Storage Based Long-term Memory Research on LLM" International Journal of Advanced Network, Monitoring and Controls, vol. 9, no. 3, Sciendo, 2024, pp. 69-79. https://doi.org/10.2478/ijanmc-2024-0029 [3] Zhong, W., Guo, L., Gao, Q., Ye, H., & Wang, Y. (2024, March). Memorybank: Enhancing large language models with long-term memory. In Proceedings of the AAAI Conference on Artificial Intelligence (Vol. 38, No. 17, pp. 19724-19731). [4] Huang, Xu et al. “Understanding the planning of LLM agents: A survey.” ArXiv abs/2402.02716 (2024) [5] Guo, J., Li, N., Qi, J., Yang, H., Li, R., Feng, Y., ... & Xu, M. (2023). Empowering Working Memory for Large Language Model Agents. arXiv preprint arXiv:2312.17259. [6] Zhang, Zeyu et al. “A Survey on the Memory Mechanism of Large Language Model based Agents.” ArXiv abs/2404.13501 (2024) [7] Mirza, A., Alampara, N., Kunchapu, S., Emoekabu, B., Krishnan, A., Wilhelmi, M., ... & Jablonka, K. M. (2024). Are large language models superhuman chemists?. arXiv preprint arXiv:2404.01475. [8] Boiko, D.A., MacKnight, R., Kline, B. et al. Autonomous chemical research with large language models. Nature 624, 570–578 (2023). https://doi.org/10.1038/s41586-023-06792-0 [9] Darvish, K., Skreta, M., Zhao, Y., Yoshikawa, N., Som, S., Bogdanovic, M., ... & Shkurti, F. (2024). ORGANA: A Robotic Assistant for Automated Chemistry Experimentation and Characterization. arXiv preprint arXiv:2401.06949. [10] Skreta, Marta et al. “RePLan: Robotic Replanning with Perception and Language Models.” ArXiv abs/2401.04157 (2024) [11] M. Bran, A., Cox, S., Schilter, O. et al. Augmenting large language models with chemistry tools. Nat Mach Intell 6, 525–535 (2024). https://doi.org/10.1038/s42256-024-00832-8 [12] Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Narang, S., ... & Zhou, D. (2022). Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171. [13] Ouyang, S., Zhang, Z., Yan, B., Liu, X., Choi, Y., Han, J., & Qin, L. (2023). Structured chemistry reasoning with large language models. arXiv preprint arXiv:2311.09656.
+
+Questions:
+Given that the system doesn't appear to have chemistry-specific components, is there any particular reason why you focused solely on chemistry applications? Have you considered or tested the system's performance in other domains like physics or mathematics?
+Can you provide more details on how the results in Table 1 were obtained, particularly for the GPT-4 baselines? It appears some results may have been taken from other papers - could you clarify the sources and methodologies used?
+Have you considered evaluating ChemAgent's performance on other chemistry-specific benchmarks, such as ChemBench? What was the rationale for the choice of benchmarks used in the current study?
+Could you elaborate on what you mean by "predefined templates" when discussing previous methods? How does ChemAgent's approach differ, given that it also relies on predefined prompts?
+Several relevant works in the field of chemical reasoning and LLM agents with memory mechanisms seem to be missing from your citations. Please properly address these works and cite them accordingly.
+Flag For Ethics Review: No ethics review needed.
+Rating: 6: marginally above the acceptance threshold
+Confidence: 5: You are absolutely certain about your assessment. You are very familiar with the related work and checked the math/other details carefully.
+Code Of Conduct: Yes
