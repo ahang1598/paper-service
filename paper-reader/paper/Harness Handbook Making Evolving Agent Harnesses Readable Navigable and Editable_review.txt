@@ -1,0 +1,163 @@
+================================================================
+论文审稿意见 (Peer Review)
+================================================================
+
+论文标题 (Title):
+  Harness Handbook: Making Evolving Agent Harnesses Readable, Navigable, and Editable
+
+作者 (Authors):
+  Ruhan Wang, Yucheng Shi, Zongxia Li, Zhongzhi Li, Yue Yu, Junyao Yang,
+  Kishan Panaganti, Haitao Mi, Dongruo Zhou, Leoweiliang
+  (Tencent HY LLM Frontier; Indiana University; University of Maryland,
+   College Park; University of Georgia; National University of Singapore)
+
+来源信息 (Source):
+  arXiv:2607.13285v1 [cs.AI], dated 14 Jul 2026
+  源文件名: Harness Handbook Making Evolving Agent Harnesses Readable Navigable and Editable.pdf
+
+审稿范围说明:
+  本审稿以"智能体脚手架 / harness、可演化系统、人与智能体协作框架"
+  子领域资深审稿人视角撰写，覆盖研究动机与问题定义、方法与技术贡献、
+  实验设计与结果、写作与可复现性、新颖性与局限性，以及与已有工作
+  （agent framework、tool-use / repository-memory 框架）的关系。
+
+
+================================================================
+Reviewer 1 — 偏支持 / 建设性立场 (Supportive / Constructive)
+================================================================
+
+R1-C1. 【问题定义清晰且切中要害】
+类型 (Type): Strengths
+说明: 论文将"behavior localization（行为定位）"——即定位实现某条修改
+请求所对应行为的全部代码位置——明确为一个独立于"生成编辑"的前置瓶颈，
+这一抽象非常有价值。作者指出生产级 harness 行为分布在文件、执行阶段与
+共享状态之间，而修改请求描述的是"系统应当做什么"，仓库却按"文件/函数"
+组织，二者之间存在结构性错位（第 1 节）。该动机论证扎实，弥补了现有
+repository indexing / code search 工作只解决"可检查性"、未解决"行为—实现
+映射"的空缺，是全篇最强的贡献点。
+
+R1-C2. 【双模式设计与重同步机制工程上务实】
+类型 (Type): Strengths
+说明: 论文提出 function-as-leaf（依赖可信种子骨架 S0）与 file-as-leaf
+（推断层级）两种构造模式，分别贴合紧凑 harness（Terminus-2，6 文件）与
+超大规模 monorepo（Codex，数千文件）两类场景，设计取舍有依据（3.2 节与
+附录 C.1）。更关键的是 3.3.3 的自动重同步（resynchronization）以 diff 驱动、
+按指纹/哈希匹配而非行号，使 handbook 在仓库演化后保持可达（resolvable），
+而非一次性产物。这一"始终以仓库为权威"的工程约束（frozen locator 机制）
+体现了作者对真实维护流程的理解，是其区别于一次性文档生成工具的实质贡献。
+
+R1-C3. 【建议补充构造成本与局限讨论以进一步提升可信度】
+类型 (Type): Suggestions
+说明: 作为支持方，我建议作者补强两点以接近可接收状态：其一，全文未报告
+handbook 的"构造成本"（LLM 辅助分类/审查的调用量、耗时、token 开销），而
+这是决定该方法在快速演化的仓库中是否实用的关键（附录 A 详述了流程却无成本
+数字）；其二，结论未设独立 Limitations 小节，对"种子骨架不可靠时 file-as-leaf
+推断质量如何""handbook 本身给出错误引导的后果"等风险缺少诚实讨论。加入
+这两部分即可显著提升严谨度，不影响其整体价值。
+
+--- Reviewer 1 Verdict: Accept (Minor clarifications suggested) ---
+Overall summary: 选题切中 agent harness 演化的真实痛点，behavior localization
+的形式化与 behavior-centric 表示是该方向有意义的贡献；双模式构造与 diff 驱动
+重同步使方案在真实工程中可用。写作清晰、相关工作梳理到位。建议在接收前补充
+构造开销测算与局限性讨论，并适当扩展被测 harness 数量，但这些问题不削弱其
+核心贡献，故给出 Accept（小修即可）。
+
+
+================================================================
+Reviewer 2 — 偏挑剔 / 质疑立场 (Critical / Skeptical)
+================================================================
+
+R2-C1. 【"弱规划器匹配强模型"的论断存在概念混淆】
+类型 (Type): Weaknesses
+说明: 4.2.2 与 RQ2 宣称"借助 handbook，一个更弱的规划器能够达到远强模型的
+实现位点定位水平"，此表述具有误导性。实验中规划器始终为 DeepSeek-V4-Pro，
+而所谓"强模型"Opus 4.8、GPT-5.5 仅被用于生成参考计划（reference plans）以
+评分（Table 1 注脚与 4.1 节），它们本身并未执行定位任务。因此更准确的说法是
+"handbook 辅助下的计划其定位结果与强模型生成的参考计划更一致"，而非规划器
+"胜过/等同于"强模型。将"与参考计划重合度提升"改写为"匹配更强模型能力"夸大了
+结论，建议作者严格区分"被评分的参考"与"参与任务的模型"。
+
+R2-C2. 【标题称"Editable"但实验从未验证编辑正确性；评审存在自偏好偏差】
+类型 (Type): Weaknesses
+说明: 标题与贡献点包含"Editable"，且 3.3.2/附录 B.3 描述了 executor 应用计划
+P 产出 R'，但实验评估（4.1–4.2）只由 LLM 裁判对"计划 P"打分，并未测量编辑是否
+真正可应用、是否通过测试、是否引入回归——即端到端 edit correctness 完全缺失。
+更严重的内生性问题是评审偏见：三位裁判中的 DeepSeek-V4-Pro 同时就是规划器
+本身，且裁判模型（GPT-5.5/Opus 4.8/DeepSeek-V4-Pro）与规划/参考模型同源同代，
+存在明显的 LLM-judge self-preference。缺少对裁判条件的盲化（裁判应不知样本来自
+Baseline 还是 Handbook-Assisted）与人工校准，使"win rate"结论的可信度存疑。
+
+R2-C3. 【样本量小、无显著性检验，且请求集可能偏向方法优势】
+类型 (Type): Questions
+说明: 全文仅 60 条请求（每 harness 30 条），按类型/难度切片后每个 win-rate 切片
+仅约 10 条请求 × 3 裁判 = 30 次比较，而报告的最小增益仅 2.2–3.7 个百分点（如
+Codex 的 Localization +2.2、Reasoning +3.3），全文未提供置信区间或显著性检验，
+难以判断这些差异是否由噪声驱动。此外，Search-Hostile (SH) 类请求被定义为"将相关
+实现放在关键词搜索难以恢复的位置"（4.1 节），明显是为凸显 handbook 优势而人工
+构造的；Query/Cross-file 亦由作者策划，缺少来自真实维护工单或用户的独立来源。
+请问作者：是否做过 bootstrap 显著性检验？请求集是否经过第三方/用户独立拟定以
+排除构建偏向？
+
+--- Reviewer 2 Verdict: Major Revision ---
+Overall summary: 论文抓住了有价值的工程问题，方法设计有其巧思，但关键结论存在
+两处硬伤：(1) RQ2 的"弱规划器匹配强模型"是对参考计划的错读，夸大其词；(2) 标题
+承诺的"Editable"缺乏端到端编辑正确性证据，且裁判模型与规划器同源导致自偏好偏差。
+加上小样本无显著性检验、请求集可能偏向方法，当前证据不足以支撑其强结论。建议
+退修（Major Revision），要求修正论断措辞、补充盲化人工评审与端到端执行评估、
+提供统计显著性，否则难以接收。
+
+
+================================================================
+Reviewer 3 — 中立 / 方法学严谨立场 (Neutral / Methodological)
+================================================================
+
+R3-C1. 【实验受控设计合理，token 核算公平】
+类型 (Type): Strengths
+说明: 从方法学角度看，Baseline 与 Handbook-Assisted 两臂"除 handbook 访问与导航
+外完全一致（请求、模型、仓库、工具权限、解码设置相同）"的控制是到位的（4.1 节）。
+尤其值得肯定的是，planner token 统计同时计入 handbook 与源码上下文（4.1 末段），
+因此"handbook 辅助下 win rate 上升而 token 下降"不能简单归因于更大的上下文预算，
+这一对照设计排除了一个常见的混淆因素，使 RQ1 的"更低成本更高质量"结论较为可信。
+
+R3-C2. 【定位"真值"实为 LLM 生成的参考计划，需澄清并强化评估独立性】
+类型 (Type): Questions
+说明: 表 1 的 Recall/Precision/F1 是将预测计划与 Opus 4.8、GPT-5.5 生成的参考计划
+对比得到的，但这两份参考计划本身也是 LLM 产物，并非人工核对的"全部实现位点"
+金标准。若参考计划本身遗漏了某位点，预测计划即便正确也会被判为低 Recall。建议
+作者：(a) 明确将"reference plan"表述为"LLM 生成的代理真值"而非真值；(b) 至少对
+部分请求由人类专家标注真实实现位点集合，作为更稳健的锚；(c) 在裁判时盲化条件
+（不暴露样本所属臂），并报告裁判间一致性（inter-judge agreement）。
+
+R3-C3. 【缺少明确的 Limitations / Threats-to-Validity，且可复现性依赖非公开模型】
+类型 (Type): Suggestions
+说明: 论文未设独立的局限性与有效性威胁小节，仅在结论顺带提及未来工作（self-
+evolving）。对以下方法学风险应显式讨论：只测 2 个同源倾向的 harness（Terminus-2
+属 Harbor、Codex 属 OpenAI）带来的泛化性威胁；file-as-leaf 在缺少种子骨架时推断
+阶段层级的质量上界；handbook 生成/重同步中 LLM 步骤可能引入的错误引导。可复现
+性方面，项目链接已给出、附录 D 提供 prompt 模板是加分项，但评估强依赖 DeepSeek-
+V4-Pro / GPT-5.5 / Opus 4.8 等特定前沿模型，第三方难以低成本复现。建议补充一条
+"threats to validity"小节并给出构造（含 LLM 调用）的开销数字，以匹配其工程论文定位。
+
+--- Reviewer 3 Verdict: Minor Revision ---
+Overall summary: 这是一项 motivated 清晰、实验受控良好的工程性工作，核心对照（同
+模型同解码、token 公平核算）经得起推敲，RQ1 结论稳健。主要方法学短板在于：定位
+"真值"实为 LLM 参考计划而非人工金标准、裁判未盲化、缺少局限性/有效性威胁小节，
+且可复现性受限于特定前沿模型。这些都属于可修复的呈现与评估严谨性问题，不触及
+方法根基，故建议 Minor Revision，要求澄清真值定义、补盲化与一致性、并增加
+Limitations 与构造开销。
+
+
+================================================================
+三位审稿人 Verdict 汇总
+================================================================
+  Reviewer 1 (支持/建设性):  Accept
+  Reviewer 2 (挑剔/质疑):     Major Revision
+  Reviewer 3 (中立/方法学):   Minor Revision
+
+总体研判: 论文选题（behavior localization 作为 harness 演化瓶颈）新颖且务实，
+behavior-centric 表示 + BGPD + diff 驱动重同步构成完整、可用的技术贡献，写作与
+相关工作梳理质量较高。但其最强结论（"弱规划器匹配强模型"、标题承诺的"Editable"）
+存在论断夸大与缺少端到端编辑验证的问题，且评估存在小样本无显著性、裁判同源自
+偏好、参考计划非金标准等方法学隐患。综合三位意见，建议在补强评估严谨性（盲化
+评审、人工金标准锚定、显著性检验、端到端执行指标）并修正 RQ2 措辞后接收。
+================================================================

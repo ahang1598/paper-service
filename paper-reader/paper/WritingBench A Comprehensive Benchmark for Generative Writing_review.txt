@@ -1,0 +1,132 @@
+================================================================
+论文审稿意见 / Review Reports
+================================================================
+
+【论文标题】WritingBench: A Comprehensive Benchmark for Generative Writing
+【作者】Yuning Wu, Jiahao Mei, Ming Yan, Chenliang Li, Shaopeng Lai, Yuran Ren,
+       Zijia Wang, Ji Zhang, Mengyue Wu, Qin Jin, Fei Huang
+       （单位：Alibaba Group; Renmin University of China; Shanghai Jiao Tong University）
+【会议/版本】39th Conference on Neural Information Processing Systems (NeurIPS 2025);
+            arXiv:2503.05244v4 (2025-11-27)
+【源文件名】WritingBench A Comprehensive Benchmark for Generative Writing.pdf
+【审稿范围】生成式写作综合能力基准 / 写作质量自动评测（LLM-as-a-judge,
+           query-dependent evaluation）
+================================================================
+
+
+----------------------------------------------------------------
+Reviewer 1（立场：支持 / 建设性）
+----------------------------------------------------------------
+
+R1-C1. 覆盖面广的写作基准切实填补了领域空白
+【类型】Strengths
+WritingBench 的 1,000 条查询覆盖 6 个一级领域与 100 个二级子领域，并显式支持
+style/format/length 三类约束，输入长度从数十词到近 2 万词（平均约 1,699，最大
+19,361，见 Table 2）。相比 EQ-Bench、LongBench-Write、HelloBench，它在领域层级
+（含二级分类）、需求维度与输入长度差异上明显更完整（Table 1 的对比直观可信）。
+这种以真实用户需求驱动且中英双语（445/555 条）的设定，对评估 LLM 在现实写作
+场景中的能力具有切实价值，是对现有单领域、模板化写作基准的重要补足。
+
+R1-C2. Query-dependent 评测框架是本文的方法学亮点
+【类型】Strengths
+让 LLM（Claude-3.7）针对每条 query 动态生成 5 条 instance-specific 准则、再由
+fine-tuned critic 模型按 rubric 打分的“按需评测”设计（Section 3.2）是一项清晰的方法
+贡献。其人类一致性达到 84%，显著优于静态全局/领域准则（67%/58%，对应 Claude；
+GPT-4o 下为 69%/40%，见 Table 4），消融实验也证实动态准则确实优于静态基线。
+这一思路针对写作任务“异质材料 + 多维需求”的特性，对通用 LLM-as-a-judge 评测
+具有推广意义。
+
+R1-C3. 写作增强实验验证了框架可用性，建议补充筛选敏感性分析
+【类型】Suggestions
+用 critic 筛选 top-50% 数据（12K）微调后，Qwen-2.5-7B-filtered 与 Llama-3.1-8B-
+filtered 在 WritingBench 上反超 GPT-4o（7.44/7.39 vs 6.81，Table 3），证明了评测
+框架具备数据治理（data curation）价值，是论文的加分项。建议补充两点以增强稳健
+性：(1) 解释为何在外部基准 LongBench-Write（Table 5）上 filtered 仅以 4.70 微弱
+领先 -all 的 4.69，二者几乎持平；(2) 给出筛选阈值（top-50%）的敏感性实验（如
+top-30%/top-70% 对比），说明结论对阈值选择不敏感。
+
+【Verdict】Minor Revision
+
+【Overall Summary】
+本文提出了一个覆盖广、需求维度丰富的生成式写作基准，并配套提出 query-dependent
+动态评测框架与 fine-tuned critic 模型，方法动机清晰、实验较为充分，对写作评测子
+领域有实质性推进。主要建设性意见集中在写作增强实验的稳健性补充上，无原则性缺陷，
+建议小修后接收。
+
+
+----------------------------------------------------------------
+Reviewer 2（立场：挑剔 / 质疑）
+----------------------------------------------------------------
+
+R2-C1. Critic 模型的训练存在循环依赖（circularity）与自评偏好风险
+【类型】Weaknesses
+critic 模型完全以 Claude-3.7 的 155K 评分作为训练标签（Section 3.2，约 40 个模型
+生成的 response 由 Claude-3.7 打分），而论文最终的全部排名与人类一致性又都由这
+一同源 critic 来衡量。作者未提供“以 GPT-4o 打分训练 critic”的对照实验，无法排除
+self-preference / 标注模型偏好带来的系统性偏差。当关键结论（Claude-3.7-thinking
+居首、7B 模型反超 GPT-4o）高度依赖单一闭源标注模型时，结论的客观性令人存疑。
+
+R2-C2. “7B 模型反超 GPT-4o”的宣称存在循环与基准特定性问题
+【类型】Weaknesses
+Qwen-2.5-7B-filtered（7.44）超过 GPT-4o（6.81）的论断建立在 WritingBench 自身
+评测之上，而用于筛选训练数据的 critic 与评测 critic 同源，本质上是在同一框架内
+自洽，循环风险显著。更关键的是，在外部基准 LongBench-Write（Table 5）上，filtered
+仅以 4.70 领先 -all 的 4.69，优势几乎可忽略，论文正文却只突出 WritingBench 上的
+反超，有选择性报告（cherry-picking）之嫌，需在主文中诚实呈现两基准上的不一致表现。
+
+R2-C3. 相关工作对比遗漏关键写作基准（含 HoWToBench）
+【类型】Weaknesses
+Table 1 与 Section 2.1 的对比仅集中于 EQ-Bench、LongBench-Write、HelloBench，
+但遗漏了 HoWToBench 等同样面向长文本 / 功能性、指令式写作的近期基准，也未与创
+意写作方向的 “A confederacy of models”（引用 [7] 却仅归为 fiction 一类）做充分
+区分与对照。这削弱了“comprehensive”的定位主张，并使本文贡献相对于已有写作
+基准的新颖性边界不够清晰，建议补充横向对比或明确说明为何这些基准不在比较范围内。
+
+【Verdict】Major Revision
+
+【Overall Summary】
+论文在基准覆盖与动态评测思路上有价值，但存在两处原则性方法学隐患：一是 critic
+训练与评测高度依赖单一闭源模型造成的循环依赖与自评偏好；二是“7B 反超 GPT-4o”
+受益于框架内自洽且外部基准上优势微弱，宣称有夸大。加上相关工作对比遗漏 HoWToBench
+等关键基准，建议大修，补充对照实验与更诚实的结果呈现后方可 reconsider。
+
+
+----------------------------------------------------------------
+Reviewer 3（立场：中立 / 方法学严谨）
+----------------------------------------------------------------
+
+R3-C1. 人类一致性度量的定义与 tie 处理需澄清
+【类型】Questions
+人类一致性基于 300 条 query 的 pairwise A/B/Tie 比较（Section 4.3，Appendix A.3，
+5 名语言背景标注者，κ=0.69），但文中未说明当人工判为 Tie 时，critic 与人类的“对齐”
+如何计（双向一致才算对齐，还是任一方向即算？）。此外静态 domain-specific 准则
+在 GPT-4o 下仅 40%，明显低于其动态版 79%，需排除这是评测 prompt 实现问题而非
+准则本身的差异。建议补充 critic 与人工在逐条（per-criterion）层面的评分一致性，而
+不仅是 pairwise 排序一致性，以更严格地验证对齐质量。
+
+R3-C2. 基准规模与子领域级统计功效
+【类型】Questions
+全基准 1,000 条查询、每 query 仅 3 次采样（Table 3 中部分模型 std 低至 0.004），
+虽显示整体稳定，但对 Figure 5 的 100 个子领域细粒度热力图而言，每子领域平均仅
+约 10 条，统计功效有限，子领域排名易受个别样本影响。建议报告子领域级别的最小 /
+平均样本量并给出置信区间（或说明聚合方式），避免对子领域级差异做过度解读。
+
+R3-C3. 可复现性与准则生成的专有模型依赖
+【类型】Suggestions
+动态准则由 Claude-3.7 生成、critic 也以其打分为训练源，而 Claude-3.7 为闭源付费
+模型，准则生成步骤的可复现性依赖外部服务；尽管作者开源了 critic 与工具，但“准则
+如何生成”无法被第三方完整复现。建议在附录补充准则生成的确定性设置（seed /
+temperature）并随仓库发布一份生成的准则样本集；同时公开人工偏好标注的原始数据，
+以提升评测链路的可审计性与可复现性。
+
+【Verdict】Minor Revision
+
+【Overall Summary】
+作为中立的方法学审视，本文贡献明确、工程实现完整，核心质疑集中在可验证性细节：
+人类一致性中 tie 的计数口径、静态准则低分的归因、子领域级统计功效，以及准则生成
+对闭源模型的依赖。这些问题均可经由澄清与补充材料解决，不影响工作的整体价值，建议
+小修（附 rebuttal 澄清）后接收。
+
+================================================================
+（审稿意见结束）
+================================================================

@@ -1,0 +1,125 @@
+================================================================
+论文审稿意见 (Peer Review)
+================================================================
+
+论文标题：Object-Centric Learning with Slot Attention
+作者：Francesco Locatello, Dirk Weissenborn, Thomas Unterthiner,
+      Aravindh Mahendran, Georg Heigold, Jakob Uszkoreit,
+      Alexey Dosovitskiy, Thomas Kipf
+      （Google Research, Brain Team；ETH Zurich；Max-Planck Institute）
+会议：34th Conference on Neural Information Processing Systems (NeurIPS 2020)
+源文件名：Object-Centric Learning with Slot Attention.pdf
+
+说明：以下三位审稿人从"以对象为中心的表征学习 / Slot Attention /
+     无监督物体发现"子领域资深审稿人视角，对该文进行独立评审。
+================================================================
+
+
+================================================================
+Reviewer 1（立场：偏支持 / 建设性）
+================================================================
+
+R1-C1  [Strengths] 模块设计简洁优雅且具备清晰的理论保证
+Slot Attention 的核心思想——将 softmax 注意力在 slot（query）维度归一化以引入
+slot 间竞争，再用共享参数的 GRU/MLP 按 slot 独立更新——实现极其简单，配合
+Algorithm 1 的伪代码和公开代码（google-research/slot_attention）可复现性强。
+文中 Proposition 1 对输入置换不变性、slot 置换等变性给出了形式化证明，并据此
+论证"各 slot 共享表征格式、可绑定任意物体"，为"系统性泛化到未见过组合"提供了
+扎实的理论支撑，这是本文相较众多经验性 object-centric 方法最突出的亮点。
+
+R1-C2  [Strengths] 计算与内存效率优势显著，工程价值突出
+相比同样基于空间广播解码器（spatial broadcast decoder）的 IODINE，本文在
+CLEVR6 上把单卡批大小从 4 提升到 64、训练时间从约 7 天压缩到约 24 小时
+（8×V100），这一数量级的效率提升对后续研究与下游应用（控制、规划）极具吸引力。
+把"迭代变分推断的多步 encode-decode"替换为"单次编码 + 少量注意力迭代"，在
+保持有竞争力的 ARI（如 CLEVR6 98.8、Tetrominoes 99.5）的同时大幅降低了准入门槛，
+对推动社区采用 object-centric 表征有实质贡献。
+
+R1-C3  [Suggestions] 建议补充对更复杂背景与真实数据的有效性验证
+本文仅在 CLEVR6、Multi-dSprites、Tetrominoes 三类强合成、背景简单的数据集上验证，
+作者自己也承认（第 8 页）其解码器/重建损失与 IODINE 相同，因此同样会在复杂背景
+与纹理场景上吃力。考虑到本模块定位为"通用接口"，建议补充 (a) 灰度/二值化（已做，
+good）之外的更具挑战背景实验，以及 (b) 真实图像或至少单物体纹理复杂的数据，以
+更充分支撑"可推广到无解码器的下游任务（对比学习、控制）"这一有前景的论断。
+
+
+================================================================
+Reviewer 2（立场：偏挑剔 / 质疑）
+================================================================
+
+R2-C1  [Weaknesses] 全部实验建立在合成数据集上，真实场景泛化性证据缺失
+三项 object discovery 数据集（CLEVR6 / Multi-dSprites / Tetrominoes）均为程序化
+生成的、前景-背景对比强烈的合成场景，物体边界清晰、颜色/形状为离散属性。在此类
+数据上"无监督发现物体"已被 IODINE、MONet 等证明相对容易，本文的强指标（ARI 接近
+99%）很可能主要来自数据本身的简单性，而非方法的内在优越性。缺少真实照片（如
+COCO、Pascal VOC）或带自然背景的定性结果，使得"学习以对象为中心的表征"这一核心
+主张的外部有效性存疑。
+
+R2-C2  [Weaknesses] 评估指标局限且与关键基线缺乏数值对比
+ARI 本身只是聚类相似度，且作者沿前人做法显式排除了背景标签（第 6 页），因此高分
+反映的是"前景像素的划分"而非完整语义分割；更关键的是，正文 Related Work 反复
+引用 GENESIS [27]、SPACE [44]、SCALOR [43] 等同期 object-centric 方法，但 Table 1
+的定量比较里完全没有 GENESIS 的数值，读者无法判断 Slot Attention 相对这组无监督
+方法到底处于什么位置。建议至少补齐 GENESIS 在相同 CLEVR/Multi-dSprites 设定下
+的 ARI，否则"matches or outperforms relevant SOTA"的论断不够完整。
+
+R2-C3  [Weaknesses] Tetrominoes 失败模式与 set-prediction 对比的不对等需澄清
+Tetrominoes 上模型会以一定概率退化为"按条纹分割"的局部最优（第 7 页），作者仅把
+5 个 seed 中的 1 个 outlier 剔除后报告 99.5±0.2；这一失败模式结合 Table 1 中
+Slot MLP 在该数据集上 25.1±34.3 的巨大方差，提示训练对初始化/超参相当敏感，
+但正文以"为简单起见所有数据集共用一套超参"一笔带过，未讨论敏感性或给出缓解证据。
+在 set prediction 一侧，Slot Attention 仅与 DSPN [31] 比较，而 DSPN 使用更深的
+ResNet-34 编码器（第 9 页），算力/骨干不对等，所谓"显著更易实现与调参"缺乏同等
+compute 下的公平基线支撑。
+
+
+================================================================
+Reviewer 3（立场：中立 / 方法学严谨）
+================================================================
+
+R3-C1  [Questions] 训练固定 T=3 而测试增加迭代显著提升，暗示训练策略或可改进
+Figure 2 / 第 7 页显示：模型在固定 T=3 训练后，于测试时把迭代次数增至 5–7 可
+进一步提升 ARI，且在物体更多的 CLEVR10 上提升更明显。这说明 T=3 的训练并未让
+slot 收敛到充分解，性能提升更多依赖测试期"额外计算"。既然单步代价是 O(T·D·N·K)，
+为何不把训练迭代也作为可调项或在训练中引入迭代早停/课程策略？请作者澄清：当前
+T=3 是计算-性能折中，还是存在欠拟合，并给出不同训练迭代数的对照。
+
+R3-C2  [Suggestions] 组件级消融实验不足，关键设计选择缺乏系统论证
+方法引入多个彼此独立的组件：slot 维度归一化（竞争）、加权均值聚合（式 2 中分母
+对输入归一）、GRU 更新、残差 MLP、LayerNorm、固定温度 √D。正文仅口头说明 LayerNorm
+"加速收敛"、残差 MLP "有帮助"，但主文与可见摘录中缺少逐项消融（例如 GRU vs 普通
+MLP、有无加权均值、有无竞争式归一化）。考虑到"竞争式归一化"正是与 DETR/Set
+Transformer/soft-k-means 的核心区别点，建议补充：去掉 slot 间竞争（改为对输入
+归一）后的 ARI 与 set-prediction AP，以实证"竞争"带来的增益。
+
+R3-C3  [Questions] "新颖性边界"需在与 capsule / DETR / soft-k-means 的区分上更明确
+Related Work 对 inverted dot-product attention routing [62]、DETR [59]、soft k-means
+[73] 等的区分写得充分，但仍有两点待厘清：(1) 与 DETR 的 image-to-slot 注意力相比，
+本文强调"slot 随机初始化、可测试期增减数量"，而 DETR 用 learned per-query 初始化；
+这一差异在真实多物体计数任务上的实际收益缺乏同设定对照。(2) 与 soft k-means 的类比
+（slot=质心）很贴切，但本文未给出"为何可学习线性投影 + 循环更新一定优于带可学习
+参数的 k-means"的证据。建议补一组与 (a) DETR-style learned query、(b) 可学习 soft
+k-means 的直接定量比较，以坐实方法相对于既有 set-to-set 映射的边际贡献。
+
+
+================================================================
+审稿人结论 (Verdicts)
+================================================================
+
+Reviewer 1 — Verdict: Accept
+Overall summary: 本文提出了一个简单、可复现、理论支撑清晰且效率突出的通用模块，
+在两项任务上均达到或超越既有 SOTA，对推动 object-centric 表征学习落地价值明显。
+虽在真实数据验证上偏弱，但作为方法型论文其贡献已足够坚实，建议接收并鼓励后续
+在更复杂数据上扩展。
+
+Reviewer 2 — Verdict: Major Revision
+Overall summary: 方法工程上可取，但实验证据链存在明显短板：仅合成数据、ARI 排除
+背景且缺少 GENESIS 等同代方法数值对比、Tetrominoes 失败模式与 set-prediction 算力
+不对等未被充分回应。需补充真实/复杂背景验证、补齐关键基线数值、并给出超参敏感性与
+公平算力下的对照，方可重新评估。
+
+Reviewer 3 — Verdict: Minor Revision
+Overall summary: 方法学上严谨、写作与相关工作梳理到位；主要顾虑在于训练迭代策略
+（T=3 是否欠拟合）与组件级消融、以及相对于 DETR/soft-k-means 的可量化新颖性边界
+尚不够清晰。补充上述对照实验与消融后即可达到接收标准，无需结构性改动。
+================================================================

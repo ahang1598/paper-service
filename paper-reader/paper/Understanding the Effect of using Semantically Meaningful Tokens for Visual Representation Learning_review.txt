@@ -1,0 +1,93 @@
+================================================================================
+论文审稿意见 (Review Reports)
+================================================================================
+
+【论文标题】Understanding the Effect of using Semantically Meaningful Tokens for Visual Representation Learning
+【作者】Neha Kalibhat, Priyatham Kattakinda, Sumit Nawathe, Arman Zarei (University of Maryland);
+        Nikita Seleznev, Samuel Sharpe, Senthil Kumar (Capital One Research);
+        Soheil Feizi (University of Maryland)
+【来源文件名】Understanding the Effect of using Semantically Meaningful Tokens for Visual Representation Learning.pdf
+【版本/出处】arXiv:2405.16401v2 [cs.CV] 19 May 2025
+【子领域】视觉表征学习 / 视觉 tokenization / 语义化 token / 视觉-语言预训练
+
+================================================================================
+Reviewer 1（立场：偏支持 / 建设性）
+================================================================================
+
+R1-C1
+标题：研究动机清晰且切中领域痛点
+类型：Strengths
+说明：论文以"文本 token vs 图像 patch"的类比（Fig. 2）直观说明了 ViT 均匀分块缺乏独立语义的问题，并精准对接了 ARO / Winoground 对 CLIP "bag-of-words" 缺陷的批判，问题定义具有明确的现实意义与可读性。这一 framing 在概念层面为该子领域提供了有价值的讨论起点，对后续"重新思考视觉 tokenizer"的研究有启发作用。
+
+R1-C2
+标题：Intangible token（关系/动作）的设计有新颖性
+类型：Strengths
+说明：将不可定位的语义关系（动作、空间/逻辑关联）作为独立的"intangible token"引入，是对仅使用物体级 token 的现有方法（如 region tokenization）的有益补充，思路超出单纯的物体分割。基于场景图结构设计的 additive attention（按重要性排序的 7/6/5/5-k 权重）为 transformer 注入了一个合理且轻量的 inductive bias，且文中给出了"是否使用 additive attention"的消融，工程上较为诚实。
+
+R1-C3
+标题：需补充更全面的评测与基线，并修正明显笔误
+类型：Suggestions
+说明：作为 proof-of-concept，建议补充 linear-probe 表征质量评测以及向检测/分割等任务的迁移，以支撑"comprehensive representation"的论断；同时应增加与"用 DINO/CLIP 特征初始化或基于 bbox 特征的 ViT"的对照，排除预训练感知栈的混杂效应。正文 P6 将 COCO train 写作"118M samples"应为 118K，属明显笔误，需修正（P5 图引用"Figure 4.1"亦应核对）。
+
+--------------------------------------------------------------------------------
+Reviewer 1 — Verdict: Minor Revision
+Overall Summary:
+论文提出了一个直观且重要的问题：均匀 patch tokenization 是否限制了 ViT 的语义/组合表征能力，并给出了"tangible + intangible"语义 token 的可行方案。其动机、intangible token 设计与 additive attention 的消融都展现出明确价值，作为概念验证（proof-of-concept）是扎实且有启发性的。主要短板在于评测维度偏窄（仅检索 + ARO + Winoground）以及个别笔误。在补充更全面的基线与表征评测、修正笔误后，本文适合以小修（Minor Revision）被接收，尤其适合作为探讨"视觉 tokenizer 再设计"方向的工作。
+
+================================================================================
+Reviewer 2（立场：偏挑剔 / 质疑）
+================================================================================
+
+R2-C1
+标题：核心因果结论存在严重混杂（confounding）
+类型：Weaknesses
+说明：Visual Token Encoder 虽被描述为"从零训练（trained from scratch）"，但其输入 token 来自在 COCO（SEEM）与 PSG/COCO+VG（RAM）上大规模预训练的现成模型；而 ViT-s/16 基线是从像素从零训练。因此所报告的 +47% (text-to-image) / +44% (image-to-text) 提升，极可能主要源于"预训练感知栈的强特征"而非"语义化 token 范式"本身。要支撑论文主张，必须设置公平对照：例如用同样预训练 backbone 的 ViT、或随机初始化的分割器提取的 token，否则结论不成立。
+
+R2-C2
+标题：新颖性有限，且与子领域真正关心的"语义 token"议题错位
+类型：Weaknesses
+说明：基于分割/区域的视觉 token 已被 DETR、Groma（论文已引用）、object-centric learning 等充分探索；本文 additive attention 的秩（7/6/5/5-k）是硬编码经验规则，其"学习"部分仅是 cumsum(exp(a)) 的单调缩放，技术增量薄弱。更关键的是，标题"Semantically Meaningful Tokens"与子领域真正关注的离散/连续 token 之争（VQ-VAE、dVAE、语义 tokenizer 等）几乎无关——本文的 token 是连续 embedding，并未触及"语义是否需离散化"这一核心问题，存在命名与内容的错位。
+
+R2-C3
+标题：单一数据集、效率主张自相矛盾、且存在关键笔误
+类型：Weaknesses
+说明：全文仅在 COCO 上验证，对泛化性缺乏证据；声称比 ViT/CLIP 更高效，却未量化 SEEM + RAM 逐图提取 token 的开销——而这恰是主要算力与内存来源，使"训练更高效"的论断站不住脚。此外，"118M samples"（P6）、"Figure 4.1"（P5）等错误表明论文未经仔细校对，进一步削弱可信度。综合来看，在现有证据下其因果主张无法被证实。
+
+--------------------------------------------------------------------------------
+Reviewer 2 — Verdict: Reject
+Overall Summary:
+本文提出了一个有趣的方向，但作为正式学术贡献当前形式不成立：其最关键的"语义化 token 优于均匀 patch"因果结论被预训练分割器的混杂效应所破坏，且未提供公平对照实验；在方法论上，基于区域的 token 已被大量已有工作覆盖，additive attention 的技术增量有限，标题又未真正回应离散语义 token 的子领域议题。加之仅在单数据集验证、效率论证自相矛盾、以及明显的校对错误，我认为本文在当前状态下应被拒稿（Reject）。若作者能以受控实验（同 backbone 基线、随机/无序 token 对照、跨数据集验证）重做核心比较，可作为新的投稿重新评估；当前版本更适合作为 workshop 短文的雏形。
+
+================================================================================
+Reviewer 3（立场：中立 / 方法学严谨）
+================================================================================
+
+R3-C1
+标题：缺乏控制变量实验，收益难以归因
+类型：Questions
+说明：除分割器预训练这一混杂外，文中未见 (a) 随机/乱序 token 的对照、(b) 在固定 token 数量下与"基于 bbox 的 DINO/CLIP 特征"的 ViT 对比、(c) 阈值（分割 0.9、关系 0.05）的敏感性分析。缺少这些控制，无法判断 +47% 来自"语义内容"还是单纯来自"更干净/更稀疏的 token 表示"。请问作者是否能在 revision 中补充上述消融以明确归因？
+
+R3-C2
+标题：统计严谨性不足，且 additive attention 的作用存在内部矛盾
+类型：Weaknesses
+说明：实验仅用 2 个随机种子取平均，未报告方差或置信区间，检索精度（如 54.35）的显著性无从判断。更值得关注的是，COCO-Order 上"无 additive attention"版本骤降至 17.2（远低于 ViT 的 38.7），说明方法对 additive attention 强依赖；但 Fig. 4 最后两图却显示"不使用 additive attention 时 diagonal/off-diagonal 相似度对比反而最强"，这与正文"additive attention 提升表征可分离性"的叙事略相矛盾，机制解释需要更严谨的澄清。
+
+R3-C3
+标题：应扩充实验设计与可复现性细节
+类型：Suggestions
+说明：建议增加跨数据集验证（如 Flickr30K、Visual Genome）以证明泛化性；报告每张图 token 数量的分布及超过 context length 77 时的截断/处理策略；明确代码与模型权重（含 SEEM/RAM 版本）的发布计划以提升可复现性。此外，additive attention 中 a∈R^8 与"秩映射到 8 个 bin"的对应关系在文中描述存在歧义（rank 取值 1–7 却映射到 8 维向量），建议用公式或示意图讲清映射逻辑。
+
+--------------------------------------------------------------------------------
+Reviewer 3 — Verdict: Major Revision
+Overall Summary:
+本文方向（用语义实体 token 替代均匀 patch 以提升组合表征）在问题层面是有价值且及时的，但现有证据不足以支撑其较强结论。主要方法学问题包括：预训练分割器带来的混杂未受控、缺少随机/无序 token 与同 backbone 基线等归因实验、统计报告（种子数、方差）不充分，以及 additive attention 内部叙事存在矛盾。这些问题均可通过补充受控实验、扩大评测与完善可复现性来修复。因此我建议 Major Revision：在作者提供公平对照、跨数据集验证与严格统计后，再重新评估其因果主张是否成立。
+
+================================================================================
+审稿结论汇总 (Summary of Verdicts)
+================================================================================
+Reviewer 1（支持/建设性） : Minor Revision
+Reviewer 2（挑剔/质疑）     : Reject
+Reviewer 3（中立/方法学）   : Major Revision
+
+共识点：三位审稿人均认可"重新思考视觉 tokenization、用语义实体替代均匀 patch"的问题价值与方向意义；分歧集中于（1）预训练感知栈造成的混杂是否破坏了核心因果结论、（2）相比 DETR/Groma/object-centric 等已有工作的新颖性是否足够、（3）单数据集 + 弱统计是否足以支撑强主张。建议作者优先补充"公平对照基线"与"归因消融"，这是决定论文能否被接收的关键。
+================================================================================

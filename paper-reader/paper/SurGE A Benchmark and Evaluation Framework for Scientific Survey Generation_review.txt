@@ -1,0 +1,129 @@
+================================================================
+SurGE 审稿意见（模拟学术审稿）
+================================================================
+
+【论文标题】SurGE: A Benchmark and Evaluation Framework for Scientific Survey Generation
+【作者】Weihang Su, Anzhe Xie, Qingyao Ai, Jianming Long, Xuanyi Chen,
+       Jiaxin Mao, Ziyi Ye, Yiqun Liu
+       （Tsinghua University / Renmin University of China / Fudan University）
+【发表信息】SIGIR '26, Melbourne, VIC, Australia；arXiv:2508.15658v5
+【源文件名】SurGE A Benchmark and Evaluation Framework for Scientific Survey Generation.pdf
+【审阅视角】科学综述生成基准与评测框架（scientific survey generation benchmark）子领域资深审稿人
+
+说明：以下三位审稿人均以该子领域资深研究者/审稿人身份撰写，立场分别为
+      偏支持/建设性（Reviewer 1）、偏挑剔/质疑（Reviewer 2）、中立/方法学严谨
+      （Reviewer 3）。每位恰好给出 3 条意见，编号 R1-C1…R3-C3，每条含
+      简短标题、意见类型（Strengths / Weaknesses / Questions / Suggestions）
+      及 2–4 句具体说明。文末给出各审稿人 verdict 与 overall summary。
+
+================================================================
+Reviewer 1（偏支持 / 建设性立场）
+================================================================
+
+R1-C1 ｜ 两阶段解耦设计具备清晰的故障定位价值
+类型：Strengths
+论文将 survey generation 形式化为"信息收集 + 综述生成"两阶段，并借助检索上界
+（fine-tuned retriever 在 k=1000 时 R@k=0.6805，而端到端 Recall<10%）有力论证了
+瓶颈位于生成端而非数据覆盖。这种 retrieval–generation 解耦的诊断性设计思路清晰、对
+社区具有明确的启发意义，是该基准区别于 AutoSurvey/SurveyForge 自验证框架的核心优点。
+
+R1-C2 ｜ 方法无关定位与开源实践到位，可复现性强
+类型：Strengths
+SurGE 提供了 1,086,992 篇 arXiv 元数据的检索语料与 205 篇专家校验的 ground-truth
+survey，且代码（https://github.com/oneal2000/SurGE）、prompt 模板与 GT 列表全部开源、
+采用 MIT 许可、语料仅用 CC0 元数据，伦理与许可说明（§3.5）也较为规范。这切实填补了
+现有系统"管道绑定式自评"导致的不可比问题，作为方法无关基准是扎实且友好的贡献。
+
+R1-C3 ｜ 建议补做 Citation Accuracy 维度的人工对齐元评测
+类型：Suggestions
+当前 meta-evaluation（Table 2）仅对 SQS 与 CQS 两个 LLM-as-judge 维度做了人类对齐
+（Kendall's τ 最高 0.805），而最具新意、也最受质疑的 Citation Accuracy（NLI 三级）与
+SHR 均未被人工校验。建议在修订中补充小规模专家标注，验证 NLI 派生的 Doc/Sec/Sent-Acc
+与人工判定引用恰当性的一致性，以闭环支撑"可靠且可扩展的评测代理"这一核心主张。
+
+----------------------------------------------------------------
+Reviewer 1 — Verdict: Minor Revision
+Overall Summary: 本文针对科学综述生成长期缺乏标准化、可扩展评测协议这一真实痛点，提出
+了方法无关、解耦检索/生成的基准 SurGE，数据规模与开源程度俱佳，诊断性实验（检索上界
+论证生成瓶颈）设计清晰。主要改进点为：补充最具新意的 Citation Accuracy 维度的人工对齐
+证据，并适当讨论语料时间跨度与领域局限。整体属于稳健、可做 Minor Revision 后录用的工作。
+
+================================================================
+Reviewer 2（偏挑剔 / 质疑立场）
+================================================================
+
+R2-C1 ｜ "不在语料即幻觉"的判定会系统性惩罚合法引用
+类型：Weaknesses
+语料仅包含 arXiv 元数据，作者自述约 30% 的 GT 参考文献因闭源期刊等不可得；在此设定下，
+任何模型只要引用了 ACL/NeurIPS 等非 arXiv 的真实论文，就会在 Citation Accuracy 中被记为
+hallucination 并直接判 0 分（§4.2）。这把"未收录进我们的 arXiv 语料"与"编造引用"混为一谈，
+会同时压低 Citation Accuracy 与 Comprehensiveness，使指标有效性严重受损，且对能力强、引用
+面广的系统不公。
+
+R2-C2 ｜ Citation Accuracy 的 NLI 映射在方法论上站不住脚且部分冗余
+类型：Weaknesses
+用 deberta-v3-base 的 Entailment/Neutral/Contradiction 去判定"论文是否支持句中论断"，
+其 premise=论文标题+摘要、hypothesis=句中论断的方向性设定，与"科学引用是否上下文恰当"
+并不等价，且小模型在科研长文本语域的泛化存疑；更关键的是，Doc-Acc 对"出现在 GT 参考书目"
+的引用直接给 y_d=1，使该指标与 Comprehensiveness（Recall）高度冗余，难以独立反映文档级
+引用相关性。这两项叠加，使最被强调的"三级引用准确性"贡献的可信度大打折扣。
+
+R2-C3 ｜ 为何不与同台竞技的综述生成基准（如 NLPCC2024 Task 6）对比？
+类型：Questions
+Related Work（§7）只批评 AutoSurvey/SurveyForge/StepSurvey 的"自验证"缺陷，却未讨论同样
+以科学综述生成为任务、且已提供评测协议的 NLPCC2024 Shared Task 6（Survey Generation，
+ref [42]），也未 benchmark SurveyX（ref [20]）等同期工作。"首个方法无关基准"的新颖性主张
+缺乏与直接竞品基准的对照论证，审稿人质疑其"填补空白"的边界界定是否准确。
+
+----------------------------------------------------------------
+Reviewer 2 — Verdict: Major Revision
+Overall Summary: 论文的动机可信、工程量可观，但评测指标层存在两处原则性缺陷：其一是把
+"未收录进 arXiv 语料"等同于"幻觉引用"，对合法非 arXiv 引用系统性零分，严重污染 Citation
+Accuracy 与 Comprehensiveness；其二是三级引用准确性依赖一个与科学引用语义错配的小 NLI 模型，
+且 Doc-Acc 与 Recall 冗余。此外 Related Work 对直接竞品基准（NLPCC2024 Task 6、SurveyX）
+的回避削弱了新颖性论证。建议大修，重构幻觉判定与引用准确性度量并补齐对比。
+
+================================================================
+Reviewer 3（中立 / 方法学严谨立场）
+================================================================
+
+R3-C1 ｜ 指标缺乏方差与统计显著性报告
+类型：Questions
+所有结果表（Table 3、Table 4）均为单次运行均值，未给出多随机种子/多次采样下的置信区间；
+而 LLM-as-judge（CQS/SQS）本身评分方差较大，GPT-4o 评判亦存在随机性。在此前提下，诸如
+"SurveyForge 反超 RAG-Gemini""StepSurvey 在 CQS 上最高"等结论是否稳健存疑。建议补充
+bootstrap 或多次独立评分的方差/置信区间，或在显著性层面重述发现。
+
+R3-C2 ｜ Comprehensiveness 代理的上界偏低且可能低估系统真实覆盖
+类型：Weaknesses
+GT 引用平均仅 65.8 篇，而语料在 k=1000 仅召回 68%，端到端 Recall 普遍 <10%；由于 GT 本身
+作者已声明"非完备"，以其参考书目 Recall 作为 Comprehensiveness 代理，会系统性低估系统的真实
+文献覆盖能力。论文未区分"相对 GT 的相对召回"与"真实文献覆盖"，亦未讨论 k 的选择（为何 top-100
+而非更大的候选池）对结论的影响，诊断结论的因果归因需更谨慎。
+
+R3-C3 ｜ 建议补充跨领域/跨时段泛化与更全面的元评测
+类型：Suggestions
+语料与 GT 均为 2020–2024 的 arXiv CS 子集，时间与外部有效性受限，难以外推至 biomedical 等
+其他学科及 2024 年后的新文献；同时 CQS 绝对分值集中在 4.6–4.9（接近天花板），区分度偏弱。
+建议（1）补充对 Citation Accuracy、SHR 的人工元评测以与 SQS/CQS 形成四维全覆盖验证；
+（2）提供至少一个跨领域或跨时段的泛化测试，以支撑基准的普适性声明。
+
+----------------------------------------------------------------
+Reviewer 3 — Verdict: Major Revision
+Overall Summary: 作为方法学严谨的审稿人，本文在问题定义与解耦诊断上有价值，且开源与许可
+处理规范；但作为基准论文，其统计严谨性不足：全篇单次运行、无方差/显著性，LLM-judge 指标
+方差未被量化；Comprehensiveness 以非完备 GT 为代理且检索上界偏低，存在低估系统能力的归因
+风险；外部有效性受 CS/arXiv/2020–2024 限制。建议进行 Major Revision：补齐统计显著性、四维
+人工元评测，并给出跨领域/跨时段泛化证据。
+
+================================================================
+三位审稿人 Verdict 汇总
+================================================================
+Reviewer 1：Minor Revision
+Reviewer 2：Major Revision
+Reviewer 3：Major Revision
+
+综合倾向：论文贡献真实、工程扎实、可复现性好，但评测指标的有效性与统计严谨性存在需在
+大修中解决的关键问题；建议按 Major Revision 处理，重点回应 R2 的幻觉判定/NLI 映射问题与
+R3 的统计显著性/泛化问题，R1 的 citation-accuracy 人工对齐可一并补做。
+================================================================

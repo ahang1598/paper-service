@@ -1,0 +1,121 @@
+================================================================
+论文审稿意见（Peer Review）
+================================================================
+
+【论文标题】Instruct Large Language Models to Generate Scientific Literature Survey Step by Step
+【作者】Yuxuan Lai, Yupeng Wu, Yidan Wang, Wenpeng Hu, Chen Zheng
+         （单位：The Open University of China; Engineering Research Center of Integration and
+          Application of Digital Learning Technology, Ministry of Education; FloatMiracle;
+          PLA Academy of Military Science）
+【来源】arXiv:2408.07884v1 [cs.CL] 15 Aug 2024
+【源文件名】Instruct Large Language Models to Generate Scientific Literature Survey Step by Step.pdf
+【审稿领域】LLM 逐步生成科学文献综述 / 指令微调式提示工程 / 检索增强综述（Survey Generation with LLM）
+
+----------------------------------------------------------------
+Reviewer 1（偏支持 / 建设性立场）
+----------------------------------------------------------------
+
+R1-C1【Strengths】竞赛验证扎实，落地成本低
+本文提出 step-by-step 提示框架并在 NLPCC 2024 Scientific Literature Survey Generation
+评测中取得第 3 名（overall score 61.11，仅落后第 2 名 0.03%），soft heading recall
+达 95.84%（第 2 名）。更重要的是，借助 Qwen-long 的低 API 成本与高效提示设计，单篇
+综述生成成本约 0.1 RMB，在 §4.2 中给出了明确测算（200 篇共 20.86 RMB），具备真实的
+工程落地与可推广价值。这一"效果接近榜首 + 成本极低"的组合是本文最有力的卖点。
+
+R1-C2【Strengths】提示设计透明、可复现性强
+论文在 §3.3 完整给出了 6 步的提示词（Prompt-1 至 Prompt-6），并说明了格式校验与
+"未命中 Title: 标记则保留记忆重新指令"的纠错机制（§3.3 Step 1）。相比许多仅描述
+pipeline 而隐藏 prompt 的工作，本文对提示工程细节的公开程度较高，便于同行复现与
+横向改进，符合可复现性（reproducibility）的基本要求。
+
+R1-C3【Suggestions】补充同期工作对比与消融实验
+建议增加与同时期工作 AutoSurvey [7] 的直接 head-to-head 对比（目前仅在 Related Work
+中一句话提及，未在实验中并跑），以定位本文相对"检索 + outline 生成"范式的增量。同时
+建议补充轻量消融：例如去掉 Step 4 的"每节参考选择"、去掉格式重指令机制，验证各模块
+对 S-H Recall 与 ROUGE 的实际贡献，使方法贡献归因更清晰。
+
+【Reviewer 1 Verdict】Minor Revision
+Overall summary：本文以清晰的 step-by-step 提示工程在权威评测中验证了方法的
+有效性，并以极低成本展示了实用价值，提示透明度也较高。主要不足在于缺少与
+AutoSurvey 等同期方法的直接对比以及模块级消融。这些属于可快速补充的增量实验，
+不影响结论成立，建议在修改稿中补齐后即可接受。
+
+----------------------------------------------------------------
+Reviewer 2（偏挑剔 / 质疑立场）
+----------------------------------------------------------------
+
+R2-C1【Weaknesses】引用幻觉源于作者自设约束，而非方法固有局限
+论文反复将 citation/内容幻觉（§4.4、§5）归因为"未使用 reference content"与 LLM
+hallucination，但表 1 明确显示测试集实际提供了 subject、reference 与 reference content
+三个字段，作者却以"task guideline 称仅提供 subject 与 reference"（§3.1）为由放弃使用。
+若该约束并非硬性技术限制而是组织对评测协议的解读，则幻觉问题更多是方法选择而非
+固有缺陷，削弱了"未来需引入 reference content"这一核心 future work 的说服力。
+建议明确引用 NLPCC 2024 官方指南原文，或说明是否存在提交期与发布期的字段差异。
+
+R2-C2【Weaknesses】评测高度依赖单一参考综述的 ROUGE，存在方法论偏差
+Overall score 由 ROUGE、soft heading recall 与 human score 三者平均得到（§4.3），
+其中 ROUGE（ROUGE1/2/L）以单篇人类参考综述为基准。同一主题本可存在多篇合理综述，
+n-gram 重叠高并不等价于综述质量高，且 ROUGE 在总分中占三分之一权重，会放大该偏差；
+本文 ROUGE2 虽达全场最高 14.68，却可能反映"贴近参考文本"而非"内容更优"。建议补充
+基于参考无关（reference-free）质量指标或 LLM-as-judge 的多维评估，弱化对单一参考的
+依赖。
+
+R2-C3【Questions】新颖性边界模糊，与已有 outline-based 生成工作区分不足
+Plan-then-generate / outline-based 长文生成已被 DOC [15]、outline-guided writing [16]
+充分探索，AutoSurvey [7] 也已采用"检索 + outline 生成"范式（§2）。本文相对这些工作的
+增量贡献（除"在 NLPCC 任务上用 Qwen-long 落地"外）需明确界定；同时全文缺少消融，
+未能证明 6 步分解优于 3–4 步的更简方案，也难以排除"每节参考选择"等模块是否真正必要。
+请澄清核心方法论创新点，并以消融实验支撑"step-by-step 优于端到端/更少步骤"的论断。
+
+【Reviewer 2 Verdict】Major Revision
+Overall summary：本文工程实现与竞赛成绩值得肯定，但存在两处需实质性澄清的问题：
+（1）放弃 reference content 的约束依据不足，导致幻觉归因存疑；（2）评测过度依赖
+单一参考的 ROUGE，且新颖性相对 DOC / AutoSurvey 等工作的区分度不够，缺乏消融支撑。
+这些问题涉及方法动机与结论可信度，需补充官方依据、reference-free 评估与消融实验后
+才能重新评审，故建议 Major Revision。
+
+----------------------------------------------------------------
+Reviewer 3（中立 / 方法学严谨立场）
+----------------------------------------------------------------
+
+R3-C1【Strengths】两阶段结构合理，heading 质量指标突出
+框架将生成分为"大纲阶段（title→section headings→abstract）"与"内容阶段
+（每节参考选择→subsection headings→content）"两阶段（§3.2，图 2），使每小节内容生成
+能感知全局结构，这与"先规划后生成"降低结构漂移的预期一致。实证上 S-H Recall 达
+95.84%（第 2），ROUGE2 14.68（全场最高），human score 63.78（第 3），三项结构/内容
+相关指标均居前列，支持两阶段设计在保持结构一致性上的有效性（§4.4）。
+
+R3-C2【Weaknesses】缺少消融研究与可复现的统计信息
+所有设计选择——每节参考选择（Step 4）、格式重指令（Step 1）、references 截断至
+80–100 篇、以奇偶索引绕过模型拒答（§4.2）——均被声明为有效但未经任何消融验证。
+此外全文未报告 temperature、随机种子或多次运行方差，而 LLM API 生成本身具有随机性，
+表 2 的榜单名次差异极小（第 2 与第 3 仅差 0.03%），难以判断优势是否统计显著。
+建议补充消融表与多次运行的均值±方差。
+
+R3-C3【Suggestions】修正指标公式排版错误并规范人工评估说明
+正文 §4.3 中 card(T) 与 soft heading recall 的求和/分数符号显示混乱（公式被截断为
+散乱字符），影响读者准确理解多样性惩罚项；同时 human evaluation 仅列出 5 个维度，
+未说明评分者人数、评分者间一致性（如 Krippendorff's α / ICC）或打分尺度。
+建议在修改稿中重排公式、给出评分协议，并将"未来引入 reference content 以缓解幻觉"
+与更严格的 citation 准确性评估（如 citation recall / hallucination rate）结合，提升结论严谨度。
+
+【Reviewer 3 Verdict】Minor Revision
+Overall summary：本文的方法结构清晰、关键结构指标（S-H Recall、ROUGE2）表现突出，
+论证了"先大纲后内容"框架的合理性，整体质量达到发表门槛。主要短板在方法学层面：
+缺乏消融与多次运行统计、指标公式存在排版错误、人工评估协议未充分说明。这些均为
+可修正的严谨性问题，建议在修改稿中补齐消融与统计信息、修正公式与评估描述后即可接受，
+故给出 Minor Revision。
+
+================================================================
+汇总
+================================================================
+Reviewer 1：Minor Revision（支持/建设性）
+Reviewer 2：Major Revision（挑剔/质疑）
+Reviewer 3：Minor Revision（中立/方法学严谨）
+
+共识要点：
+- 优势：step-by-step 框架在 NLPCC 2024 取得第 3 名且成本极低（≈0.1 RMB/篇），
+  提示透明、S-H Recall 与 ROUGE2 指标突出。
+- 待解决：①放弃 reference content 的约束依据需澄清；②评测过度依赖单一参考 ROUGE，
+  建议补充 reference-free / LLM-judge 评估；③缺少与 AutoSurvey 的对比及模块级消融；
+  ④指标公式排版错误与人工评估协议需规范；⑤未报告温度/种子/多次运行方差。

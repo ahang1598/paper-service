@@ -1,0 +1,156 @@
+================================================================
+论文审稿意见 (Review Reports)
+================================================================
+
+【论文标题】Tongyi DeepResearch Technical Report
+【作者】Tongyi DeepResearch Team（Tongyi Lab, Alibaba Group）
+       项目负责：Yong Jiang；核心贡献者含 Baixuan Li, Bo Zhang, Dingchu Zhang,
+       Fei Huang, Jingren Zhou, Kuan Li, Liangcai Su, Rui Ye, Wenbiao Yin 等
+【来源】arXiv:2510.24701v3 [cs.CL]，2026-05-18
+【源文件名】Tongyi DeepResearch Technical Report.pdf
+【论文性质】技术报告（Technical Report），已开源模型/框架/评测脚本
+           https://github.com/Alibaba-NLP/DeepResearch
+
+【论文概要】
+本文提出 Tongyi DeepResearch，一个面向长程、深度信息检索研究任务的 agentic LLM。
+系统基于 Qwen3-30B-A3B-Base（总参 30.5B，每 token 激活 3.3B 的 MoE），采用端到端
+训练框架，统一 agentic mid-training（两段式 Agentic CPT：32K→128K）与 agentic
+post-training（数据合成 → SFT 冷启动 → agentic RL）。全程使用全自动化、无需人工标注
+的合成数据管线，并针对不同阶段构建专用环境（Prior World / Simulated / Real-world）。
+架构基于 vanilla ReAct，并引入基于马尔可夫状态重建的 context management 机制以突破
+长程上下文限制。RL 采用 on-policy 的 GRPO 适配（RLVR + DAPO clip-higher + leave-one-out
++ 负样本过滤），基于 rLLM 的异步 rollout 框架。最终通过 model merging 融合多个变体。
+Heavy Mode 以并行研究 + 集成综合（test-time scaling）进一步提升表现。
+主实验结果：HLE 32.9 / BrowseComp 43.4 / BrowseComp-ZH 46.7 / WebWalkerQA 72.2 /
+GAIA 70.9 / xbench-DeepSearch 75.0 / FRAMES 90.6 / xbench-DeepSearch-2510 55.0；
+Heavy Mode：HLE 38.3 / BrowseComp 58.3 / BrowseComp-ZH 58.1。
+
+================================================================
+Reviewer 1（立场：偏支持 / 建设性）
+================================================================
+
+R1-C1 【端到端开源范式与极小激活参数量下的 SOTA 表现】
+类型：Strengths
+本文最突出的贡献是把"深度研究智能体"从闭源系统（OpenAI/Gemini/Kimi DeepResearch）
+拉回社区可复现的开源范式：不仅开源权重，还开源了框架、完整工具实现与评测脚本。
+在仅 3.3B 激活参数的条件下，于 HLE（32.9）、FRAMES（90.6）、xbench-DeepSearch（75.0）
+等 7 个基准上取得领先，相对 OpenAI o3、DeepSeek-V3.1、Gemini DeepResearch 等均有
+可比甚至更优结果，对"小而高效 agent"这一方向极具说服力。这一结果也直接支撑了第 5.2
+节关于 small model 部署价值的论点，工程与科研示范意义突出。
+
+R1-C2 【合成数据管线的可扩展性论述充分，但关键规模指标披露不足】
+类型：Suggestions
+第 2、3 节把"synthetic data centric scaling"作为核心设计原则，论证了可规模化、易验证、
+可形成 data flywheel 等优势，逻辑自洽且贴合 WebShaper/WebResearcher 等前期工作的形式化
+基础，方向正确。然而全文中合成数据仅披露了"超 20% 样本 >32k token 且 >10 次工具调用"
+（第 4.4 节）这一条统计，缺少轨迹总量、各阶段分布、训练步数对应的数据吞吐等量化信息。
+建议补充数据规模与成本表（类似 agentic CPT 两段 / SFT / RL 各阶段样本数与 token 数），
+这将显著提升社区复用与横向对比的价值。
+
+R1-C3 【Heavy Mode 的 test-time scaling 设计优雅且得到实证支撑】
+类型：Strengths
+基于 context management 压缩报告（S_T）做并行研究 + 集成综合的 Heavy Mode 是本文
+极具实用价值的亮点：它绕开了"聚合完整轨迹很快超出上下文"的难题，把 test-time compute
+沿"环境交互次数"这一区别于 token 数的维度有效放大。图 6 显示 HLE 由 32.9→38.3、
+BrowseComp 由 43.4→58.3、BrowseComp-ZH 由 46.7→58.1 的显著提升，是 interaction
+test-time scaling（第 4.4 节图 10a）思想的合理延伸。建议补一项控制实验：固定总交互预算，
+比较"单 agent 深搜"vs"n 个并行 agent 浅搜后综合"，以更干净地隔离并行带来的增益。
+
+------ R1 Overall Summary ------
+本文在深度研究智能体这一新兴子领域给出了一份高质量、可复现且结果领先的技术报告，
+开源力度（模型+框架+评测）在同类工作中罕见。主要不足在于合成数据规模指标披露偏少、
+少数实验缺少更干净的控制变量。整体建议在补充数据规模统计与少量消融后接收。
+------ R1 Verdict: Accept（技术报告导向，minor clarifications 即可）------
+
+================================================================
+Reviewer 2（立场：偏挑剔 / 质疑）
+================================================================
+
+R2-C1 【主表跨系统对比存在严重非对齐，削弱"超越闭源"的论断】
+类型：Weaknesses
+Table 1 中的对比在多个维度上不可直接比较，使"surpasses strong proprietary systems"
+的论断被高估。其一，评测时间不一致：大多数基准取 2025-09-16，而 xbench-DeepSearch-2510
+取 2025-10-28（第 4.1 节），基准版本随时间变化会影响可比性。其二，大量基线存在缺失项
+（"–"）：OpenAI o3 缺 GAIA、xbench，Gemini DeepResearch 除 HLE 外几乎全缺，Kimi
+Researcher 仅 3 项有值——用这些稀疏矩阵做"全面超越"的表述不够严谨。其三，对 Gemini
+DeepResearch 的"超越"仅建立在 HLE（32.9 vs 26.9）与 BrowseComp（43.4 vs 无值）等极
+少重叠项上，BrowseComp 一项本身还是本系统逊于 OpenAI DeepResearch（43.4 vs 51.5）。
+建议明确定义可比子集并弱化笼统的"SOTA over proprietary"措辞，或补充同期同条件下的重测。
+
+R2-C2 【"agentic mid-training 新颖性"与 RL 算法创新性均缺乏清晰边界】
+类型：Questions
+本文将引入 mid-training 标榜为新颖之处（"while most work only applies post-training… we
+novelly introduce mid-training"，第 2 节），但整段方法（Agentic CPT 两段式、实体锚定开放
+世界记忆、function-calling 环境扩展）几乎直接建立在同团队已发表的 "Scaling Agents via
+Continual Pre-training"（Su et al., 2025）之上。需要明确说明本文相对该前置工作的增量究竟
+是什么（是新数据配方、新环境，还是新训练配方），否则新颖性主张站不住脚。另一方面，RL
+算法被作者自述为"tailored adaptation of GRPO"（第 3.4.3 节），所采用的 token-level loss、
+clip-higher、leave-one-out、负样本过滤均来自 DAPO / 既有工作，作者也承认"motivation is
+not algorithmic novelty"。作为技术报告可接受，但应在贡献清单中把"算法创新"与"系统/数据/
+工程创新"明确区分，避免读者高估方法学原创度。
+
+R2-C3 【真实环境依赖内部 API，开源替代实现的保真度未量化验证】
+类型：Weaknesses
+第 3.4.3 节承认系统依赖若干内部 API 与 fallback 策略，开源仓库仅提供"alternative open
+implementations"，并称"verified through extensive testing that these substitutions can faithfully
+reproduce our results"。但论文从未给出内部 API 实现与开源替代实现在同一组问题上的定量
+一致性（如分数差异、工具返回一致性），仅以"extensive testing"一笔带过。由于 RL 阶段真实
+环境使用付费搜索 API，外部研究者用替代工具复现 RL 训练与最终分数的可信度存疑；而真实
+环境 RL 正是本文主要卖点之一。建议补充内部 vs 开源工具在若干基准上的分数对照，或至少
+披露工具替换带来的评测方差，以兑现"open, reproducible"的承诺。
+
+------ R2 Overall Summary ------
+本文工程完整、开源充分，是深度研究智能体领域有价值的实践总结；但在结果可比性、方法
+新颖性边界、与可复现性承诺的兑现三方面存在实质性问题，可能误导读者对性能与方法原创度
+的判断。建议进行较大修订，补齐对比公平性、创新点界定与工具保真度验证后再考虑接收。
+------ R2 Verdict: Major Revision ------
+
+================================================================
+Reviewer 3（立场：中立 / 方法学严谨）
+================================================================
+
+R3-C1 【上下文长度消融中数据课程与上下文上限混淆，因果推断不干净】
+类型：Questions
+图 9 / 第 4.4 节比较 32k/48k/64k 上下文上限下的 RL，并得出"短上下文模型被迫学到更高效
+解法"的洞见。但文中明确说明三个变体的动态数据课程均由 64k 模型统一筛选（"dynamic data
+curation … performed using the same model with a 64k context"）。这意味着短上下文组面对的是
+为其"超能力兄长"定制的困难课程，其奖励上限被课程难度而非自身上限单独决定——"上下文上限"
+效应与"课程难度错配"效应被严重混淆。所谓"32k 响应长度下降 = 学到更紧凑策略"更可能是
+被零奖励惩罚驱动的被动收缩，而非主动效率提升。建议补充控制实验：用与各组能力匹配的课程
+分别训练，或固定课程后仅变上下文上限，以分离两个因素。
+
+R3-C2 【评测裁判异质性与采样方差报告不足，跨基准比较需谨慎】
+类型：Suggestions
+第 4.1 节与附录 B 显示各基准采用不同 LLM-as-judge（GAIA/WebWalkerQA 用 Qwen2.5-72B，
+xbench 用 Gemini-2.0-Flash，BrowseComp 用 GPT-4o，HLE 用 o3-mini），裁判模型异构会
+给跨基准横向比较引入系统性偏差，尤其当某些闭源基线分数部分来自厂商自报时。此外，推理
+配置为 temperature=0.85、top-p=0.95，作者也承认"unstable evaluation environment"，虽称
+Avg@3 与 Pass@1 一致，但未报告任何方差/置信区间，仅以柱状图展示。建议补充各基准的
+std/置信区间，并讨论裁判异质性对排名结论的潜在影响，以增强结论稳健性。
+
+R3-C3 【动态数据筛选与训练稳定性证据扎实，但计算成本披露缺失】
+类型：Strengths
+第 3.4.3 节自动数据筛选（过滤"总对/总错"样本、按策略进步刷新训练集）设计方法学上合理，
+图 8 奖励单调上升且策略熵稳定收敛，确证了"环境稳定 + 数据质量 > 算法本身"的核心论点，
+是全文最有说服力的实证。配套的统一沙箱（QPS 限流、缓存、超时重试、failover）也展示了
+扎实的工程方法论。作为可复现性支撑，建议补充关键成本量：RL 训练总步数（图 8/9 约 500 步）、
+GPU 时、每步 rollout 数与环境交互规模，便于社区评估投入产出与复现门槛。
+
+------ R3 Overall Summary ------
+本文在系统设计、数据工程与训练稳定性上的方法论是严谨且可借鉴的，自动数据筛选与沙箱
+设计尤为出色；但若干消融实验的因果混淆与评测异质性/方差报告的缺失，使其部分结论的稳健
+性需打折扣。建议补充控制变量实验与成本/方差披露，做小修后即可接收。
+------ R3 Verdict: Minor Revision ------
+
+================================================================
+汇总（Summary of Verdicts）
+================================================================
+Reviewer 1（支持/建设性）   : Accept
+Reviewer 2（挑剔/质疑）     : Major Revision
+Reviewer 3（中立/方法学）   : Minor Revision
+
+一致意见：论文在"开源深度研究智能体"这一方向上贡献明确、结果领先、工程完整，具备接收
+价值；主要分歧集中在（a）跨系统结果可比性与性能论断的措辞严谨度，以及（b）方法新颖性
+边界与可复现性承诺的兑现程度。建议作者在修订中优先处理 Table 1 对比公平性、mid-training
+相对前置工作的增量界定、以及内部 vs 开源工具的定量保真度验证。
+================================================================

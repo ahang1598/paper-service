@@ -1,0 +1,150 @@
+================================================================
+Xpertbench 审稿意见（Peer Review）
+================================================================
+
+论文标题 (Title):
+    Xpertbench: Expert Level Tasks with Rubrics-Based Evaluation
+
+作者 (Authors):
+    ByteDance Seed（字节跳动 Seed 团队）
+    核心贡献者（按 α-β 序）：Xue Liu, Xin Ma, Yuxin Ma, Yongchang Peng,
+    Duo Wang†, Zhoufutu Wen, Ge Zhang†, Kaiyuan Zhang 等（共 40 余名作者，
+    通讯作者 wangduo.neuron@bytedance.com / zhangge.eli@bytedance.com）
+    顾问：Shanshan Wu, Qi Zhao, Wenhao Huang
+
+来源文件 (Source File):
+    Xpertbench Expert Level Tasks with Rubrics-Based Evaluation.pdf
+    （arXiv:2604.02368v4, cs.AI, submitted 21 Apr 2026）
+
+----------------------------------------------------------------
+论文概要（供审稿人参考）
+----------------------------------------------------------------
+XpertBench 提出一个面向真实专业工作流的多领域专家级基准，包含 1,346 个
+任务，覆盖 Finance(18.1%)、Law(16.0%)、Education(24.4%)、EAS(20.4%)、
+HSS(8.6%)、CS(6.8%)、Healthcare(5.6%) 共 7 大领域、80+ 子类。任务由
+1,000+ 名领域专家（约 61% 来自中国 985/211 高校）依据真实工作场景构建，
+每项任务配 15–40 个带权重的原子化 rubric checkpoints（双权重：Essential/
+Important/Optional 定性 + 1–10 定量）。评测采用 ShotJudge 范式：以 GPT-5
+生成的响应作为 anchor baseline，由专家盲审给出 gold-standard 评分理由，再
+以 Gemini 2.5 Pro 为 LLM Judge，用该 one-shot 专家样例做 in-context 校准。
+经分层抽样得到 XpertBench-Gold（N=245），对 12 个 SOTA 模型评测，最优模型
+Claude-Opus-4.6-thinking 总体得分 66.20%，GPT-5.4-high 64.78%。论文报告
+ShotJudge 与专家的一致性指标 CDR = 52.0%，并指出 retrieval interference、
+principle hallucination 等关键失败模式。
+
+================================================================
+Reviewer 1（偏支持 / 建设性立场）
+================================================================
+
+R1-C1. 真实工作流驱动的生态效度与规模优势（Strengths）
+    论文最突出的价值在于以"真实专业任务"而非"考试题"为锚点，显著提升了基准
+    的生态效度（ecological validity）。相较 Humanity's Last Exam、FrontierMath
+    等封闭式难题，XpertBench 将评测从孤立知识点转向端到端工作流（如信用评级
+    报告、保理合同纠纷分析、课程剧本设计），这一设计取向对衡量"AI 作为专业协
+    作者"的实用价值更具说服力。附录 A 中金融与 STEM 的样例任务及 rubric 质量
+    很高，足以佐证其专业严谨性。
+
+R1-C2. 应公开完整 1,346 条任务与 rubric 以增强可复现性（Suggestions）
+    正文强调 1,346 任务，但严格专家校准的 XpertBench-Gold 仅 N=245（约 18%），
+    其余 1,101 条任务缺乏完整 gold 标注。建议作者随论文发布全部 1,346 条任务
+    的 prompt 与 rubric（至少以可机器解析的格式），并说明非 Gold 部分的评测
+    协议，避免"规模"被误读为"已校准规模"。此外，ShotJudge 的 judge prompt 与
+    one-shot 样例应一并开源，便于社区复现 CDR 与榜单。
+
+R1-C3. 失败模式诊断对后续研究有启发价值（Strengths）
+    论文第 5 节对 retrieval interference（持久联网引入噪声干扰主线推理）与
+    principle hallucination（早期概念错误级联导致整条推理链失效）的定性分析，
+    超越了单纯榜单排名，为模型改进提供了可操作方向。这类细粒度行为诊断正是
+    rubric-based 评测相对 point-estimate 指标的优势，值得在修改中进一步用
+    量化证据（如分维度失败率）加以支撑。
+
+------ Reviewer 1 Verdict ------
+Verdict: Minor Revision
+Overall Summary: 本文在专家级、开放式、rubric-based 评测方向上做出了扎实且有
+生态效度的贡献，任务来源与 rubric 设计均达到较高专业水准，失败模式分析具有
+明确的研究启发意义。主要修订诉求在于提升透明度与可复现性（公开完整任务/rubric
+与 judge 协议、明确 Gold 与非 Gold 的边界）。在补充上述材料后，本文具备接收
+价值，建议小修接收。
+
+================================================================
+Reviewer 2（偏挑剔 / 质疑立场）
+================================================================
+
+R2-C1. 自动评测器 ShotJudge 的可靠性存疑（CDR 仅 52.0%）（Weaknesses）
+    论文将 ShotJudge 作为核心方法论贡献，但其与专家的一致性指标 CDR = 52.0%
+    实际意味着约 26% 的判别是"不一致"的（P(disagree) ≈ 0.24），对于一个要
+    对 12 个模型排定高下、并据以宣称"expert-gap"的基准而言偏低。作者仅称其
+    "显著优于 zero-shot baseline"，却未报告 zero-shot 的具体数值与统计显著性
+    检验，难以判断 52.0% 是否真的足够支撑结论。建议补充 bootstrap 置信区间
+    以及分领域/分难度下的 CDR 衰减曲线。
+
+R2-C2. ShotJudge 存在自我增强偏差（self-rewarding bias）风险（Weaknesses）
+    ShotJudge 的 one-shot 校准样例来自 anchor baseline 模型 GPT-5 的响应及其
+    专家评分，而主 Judge 为 Gemini 2.5 Pro；但 anchor 选择的底层逻辑是用
+    GPT-5 的"正确示范"定义评分标准。这会使评测标准无形中向 GPT 家族的生成
+    风格与答法倾斜，与其声称要"mitigate self-rewarding biases"的初衷存在张力。
+    若 GPT-5.4-high 在 Finance 以 84.65% 大幅领先，需排除这是 rubric/校准偏置
+    而非真实能力所致。建议用多个异构 anchor（含非 GPT 模型）做消融以证伪偏差。
+
+R2-C3. Gold 子集过小且存在地域/法域偏向（Questions）
+    其一，XpertBench-Gold 仅 N=245，且 CS 与 Healthcare 因校准成本被排除在
+    细粒度分析之外，导致"五领域"结论基于高度欠采样数据；其二，专家约 61% 来自
+    中国 985/211 院校，附录 Law 样例直接基于《民法典》保理合同（广西公司案），
+    金融样例亦以美股财年为锚。这使其"generalist professional capability"的宣称
+    在跨法域/跨文化泛化上存在疑问。请作者说明任务抽样是否覆盖多法域，并讨论
+    地域集中是否系统性抬高/压低了特定模型的相对表现。
+
+------ Reviewer 2 Verdict ------
+Verdict: Major Revision
+Overall Summary: 论文的问题定义与任务素材质量值得肯定，但其方法论的可靠性论证
+明显不足：ShotJudge 的 CDR 偏低且缺乏对照基线统计、one-shot anchor 由 GPT-5
+生成带来自我增强偏差隐患、Gold 子集样本量小且专家来源地域集中。这些问题直接
+威胁"专家级能力缺口"这一核心结论的有效性，必须在大修中通过消融实验、多 anchor
+对照与偏差分析加以回应，否则难以令人信服。
+
+================================================================
+Reviewer 3（中立 / 方法学严谨立场）
+================================================================
+
+R3-C1. 标注质量缺乏量化的一致性度量（Questions）
+    论文描述了两阶段专家资质筛选、同行评审与约 30% 资深专家抽检，但全文未报告
+    任何标注者间一致性（inter-annotator agreement）指标，如 Cohen's κ 或
+    Krippendorff's α，也未说明二元 checkpoint 判定在专家间存在分歧时的仲裁规则。
+    由于最终得分 S = Σ(wᵢ·xᵢ)/Σwᵢ 依赖每个 xᵢ 的二元判定，标注噪声会直接线性
+    传导到模型得分与排名。请补充 rubric 判定的可复现性度量，以支撑"objective
+    verifiability"的宣称。
+
+R3-C2. LLM 辅助生成 rubric 带来潜在的循环评测（Circularity）（Weaknesses）
+    第 3.3 节明确 rubric 初稿由 Claude Opus 4.1 或 Gemini 2.5 Pro 生成、再由专家
+    修订；而最终评测 Judge 同为 Gemini 2.5 Pro。当"出题—给分标准—评测器"均涉及
+    同一家族 LLM 时，存在 rubric 语言风格与 Judge 偏好耦合的循环风险，可能使该
+    家族模型在风格对齐上获得隐性加成。建议在论文中明确披露 LLM 辅助生成比例，
+    并报告使用非 Gemini Judge（如 Claude）时的排名稳定性作为稳健性检验。
+
+R3-C3. 模型版本与评测协议的可复现性需明确（Suggestions）
+    实验中出现的 Claude-Opus-4.6-thinking、GPT-5.4-high、Gemini-3.1-pro 等为
+    极新/未来版本，外部研究者难以在同一快照下复现；且任务普遍要求联网检索特定
+    财年数据（如 FY2023 LM/NOC 年报），但论文未规定检索工具、最大步数、超时与
+    随机种子等执行协议。为使榜单可复现，建议：(a) 固定并公开模型 API 版本与调用
+    配置；(b) 定义统一的 agent 执行环境（工具集、步数上限、temperature），或至少
+    报告不同配置下的得分方差。
+
+------ Reviewer 3 Verdict ------
+Verdict: Major Revision
+Overall Summary: 本文在任务生态效度与 rubric 设计理念上方法学上是严谨且有价值的，
+但多个方法学环节尚不符合顶级会议对"可复现评测"的要求：缺乏标注一致性量化、存在
+LLM 出题-评测循环隐患、以及模型版本/agent 执行协议未固定。这些属可修正的方法学
+缺陷而非根本性错误，建议大修，在补齐一致性度量、循环风险消融与可复现协议后重新
+送审。
+
+================================================================
+三位审稿人 Verdict 汇总
+================================================================
+Reviewer 1（支持/建设性） : Minor Revision
+Reviewer 2（挑剔/质疑）     : Major Revision
+Reviewer 3（中立/方法学）   : Major Revision
+
+（综合倾向：2/3 审稿人要求 Major Revision，焦点集中在 ShotJudge 可靠性与偏差、
+Gold 子集规模与地域偏向、以及可复现性；Reviewer 1 认为属可补材料的小修问题。
+作者需在修订中优先回应 R2-C1/C2 与 R3-C1/C2/C3。）
+================================================================

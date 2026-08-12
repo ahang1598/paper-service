@@ -1,0 +1,157 @@
+================================================================================
+                         论文审稿意见（Peer Review）
+================================================================================
+
+论文标题：
+    HoWToBench: Holistic Evaluation for LLM's Capability in Human-level
+    Writing using Tree of Writing
+
+作者：
+    Andrew Zhuoer Feng*（清华大学 / Z.ai），Cunxiang Wang*（Z.ai / 清华大学），
+    Yu Luo，Lin Fan，Yilin Zhou，Zikang Wang，Xiaotao Gu，Jie Tang，
+    Hongning Wang，Minlie Huang（* 共同一作，† 通讯作者）
+    机构：清华大学计算机科学与技术系（α）；Z.ai（β）
+    预印本：arXiv:2604.19071v1 [cs.CL] 21 Apr 2026（投稿目标 ACL2026-Tree-of-Writing）
+    代码：https://github.com/ZhuoerFeng/ACL2026-Tree-of-Writing
+
+源文件名：
+    HoWToBench Holistic Evaluation for LLM’s Capability in Human-level
+    Writing using Tree of Writing.pdf
+
+子领域：
+    LLM 写作能力评测 / 人类级写作基准 / 树状（Tree-of-Writing）评估方法
+
+说明：以下意见由三位立场不同的资深审稿人给出，每位恰好 3 条意见，编号
+R1-C1…R3-C3，意见类型取自 {Strengths / Weaknesses / Questions / Suggestions}。
+
+================================================================================
+Reviewer 1（偏支持 / 建设性立场）
+================================================================================
+
+R1-C1  [Strengths]  Tree-of-Writing 对“协商不一致”的建模切中要害且可复现
+    论文将 LLM-as-a-judge 在聚合子特征时自发切换平均/强调策略导致的
+    “Negotiation Inconsistency”问题形式化，并用显式边权（negotiator JW 为每条
+    指令生成权重，约束于 (-1,1) 且和为 1）替代隐式聚合，思路清晰。§5.3 的定量
+    证据颇具说服力：Auto-Planning 的子分波动 δ=0.273、σ=0.059，而 ToW 降至
+    δ=0.080、σ=0.017，直接证明了显式权重显著降低了聚合不稳定性。这一设计同时
+    提升了评估的可解释性，是本文相对既往 LLM-judge 工作最扎实的贡献。
+
+R1-C2  [Strengths]  HOWTOBENCH 的“专家级人类参考 + 反向构建”数据管线质量保障充分
+    基准以 12 类体裁、1302 条指令覆盖 Creative/Functional 两大类，且参考文本均来自
+    人工撰写的专业语料（CN Writer、PW4ES 等），而非 LLM 生成，避免了“用 LLM 评
+    LLM 写、又用 LLM 造数据”的自我循环。§4.6 的质量保障尤其值得肯定：通过
+    GPT-4o / GLM-4-plus / Gemini 三方生成与原始人类文本做 pairwise 优选，并让 3 位
+    专家以 96.7% 一致率裁决，最终替换了 137 条（10.5%）落选的人类原文；人工质量
+    抽检通过率达 96.85%，远高于多数同类基准，为本基准的可信度提供了实质支撑。
+
+R1-C3  [Suggestions]  补强泛化性证据：补充 instance-level 相关性与多轮/跨语言外推
+    当前 0.93 的 Pearson 相关性是在“系统排名”层面（Table 3 的 system-level ρ/τ/σ）
+    取得的，建议补充 instance-level（样本级）相关性以便与 G-Eval、WritingBench 等
+    工作直接对标，因为系统级相关通常偏高、更易达成。此外，Limitation 已坦承仅覆盖
+    中文单轮，但为建设性推进，建议至少给出英文/多轮协作的少量探路实验（即使作为
+    appendix），以验证 ToW 的树结构是否真的能跨语言、跨交互范式迁移，从而强化
+    “人类级写作评测”这一更宏大主张的普适性。
+
+**Verdict：Accept**
+
+**Overall Summary：**
+本文针对开放式写作评估中最被忽视却最关键的“聚合不一致”问题，提出了结构清晰、
+可解释、且可复现的 Tree-of-Writing 框架，并配套构建了质量极高、专家撰写的人类级
+中文写作基准 HOWTOBENCH。实验在系统级人类一致性（ρ=0.93）、协商不稳定性量化、
+鲁棒性等方面都给出了扎实证据，与已有写作基准（WritingBench 等）形成有效互补。
+尽管在 instance-level 相关性与跨语言/多轮泛化上尚有补强空间，但核心贡献明确、写作
+质量高、数据管线可信，整体上达到接收水准，建议小修时补充上述对照实验以进一步增强
+说服力。
+
+================================================================================
+Reviewer 2（偏挑剔 / 质疑立场）
+================================================================================
+
+R2-C1  [Weaknesses]  0.93 相关性是 system-level，可能高估 ToW 的真实对齐能力
+    摘要与引言反复强调“0.93 Pearson correlation with human judgments”，但 §5.2–5.3
+    与 Table 3 明确该相关性是在“系统排名”（comparing system rankings with human-
+    annotated rankings）层面计算的，而非样本级（instance-level）。系统级相关只要求
+    把 10 个模型的大致优劣排对，远比逐条对齐容易，且与 G-Eval、WritingBench 等以
+    instance/sample-level 报告的工作不可直接比较。若 ToW 在样本级只有中等相关，则
+    “强对齐人类判断”的论断会被显著高估，建议在正文显要位置补报 instance-level ρ
+    并诚实讨论二者差距。
+
+R2-C2  [Questions]  负边权语义存疑，且 negotiator 与 scorer 同依赖 GPT-4o 带来自偏置
+    边权约束为 w∈(-1,1) 且和为 1（§3.3），意味着某个内容子特征（如“逻辑”）可被赋
+    负权——在写作评估中“ penalize 某一维度”缺乏直观语义，也未见消融说明负权出现
+    的频率与影响。更关键的是，所有 LLM-as-a-judge 方法（含 ToW 的 leaf 评分专家与
+    JW negotiator）统一以 GPT-4o 为评估模型（§5.1）。ToW 的“击败”基线 Auto-Planning/
+    Elaborated Rubric 同样基于 GPT-4o，因此优势可能部分来自 ToW 显式利用了 GPT-4o
+    的规划能力，而非方法本身；若换用 Claude/Qwen 作 judge，0.93 是否稳定存疑，建议
+    补“换评估模型”的敏感性实验。
+
+R2-C3  [Weaknesses]  “千字级”“12 体裁”“首篇超越指令遵循”三处表述与事实/文献存在张力
+    摘要称评估“thousand-words level”写作，但 Table 2 显示参考文本平均仅 1167.93 个
+    汉字，Completion 任务参考更是只有 431 字，与“千字级”体感不符；应明确“千字”口径
+    或下调宣称。§4.3 列出的体裁为 fiction, poetry, prose, essay, argumentative essays,
+    reports, summaries, letters, speeches, delivery, plans, contracts, officials（共 13 项），
+    与全文“12 genres”自相矛盾，需核对去重（officials 是否独立体裁）。至于“to the best
+    of our knowledge, first to explore assessment beyond instruction-following”——
+    WritingBench（Wu et al., 2025）同样覆盖创意/功能写作多体裁，且本文将其列为基线，
+    该“首篇”论断过强，建议改为与 WritingBench 在“评估视角（ mimicking game vs. 隐性
+    意图）”上的差异对比，而非抢“首篇”定位。
+
+**Verdict：Major Revision**
+
+**Overall Summary：**
+本文的 Tree-of-Writing 概念有吸引力、数据质量也高于平均水平，但核心卖点“0.93 人类
+一致性”依赖于系统级相关，掩盖了样本级对齐这一更严格的检验，加之评估模型（GPT-4o）
+同时充当 negotiator 与 scorer 带来方法自偏置，使得结论的稳健性存疑。此外“千字级/
+12 体裁/首篇超越指令遵循”三处表述与数据、文献均有张力。若作者能在系统级之外补报
+instance-level 相关、提供换评估模型的敏感性实验、并修正上述夸大与自相矛盾的措辞，
+本文有望成为扎实的基准论文；在当前状态下尚不足以支撑其强结论，需大修。
+
+================================================================================
+Reviewer 3（中立 / 方法学严谨立场）
+================================================================================
+
+R3-C1  [Strengths]  协商不稳定性的量化与鲁棒性实验是方法学亮点，设计可复现
+    §5.3 用 δ（跨 trial 的子分占比波动和）与 σ（标准差）两个指标把“Negotiation
+    Inconsistency”从概念变成了可测量的量，并给出 ToW 相对 Auto-Planning 的显著下降
+    （δ 0.273→0.080，σ 0.059→0.017），这是全文方法学上最干净的贡献。§6.2 的鲁棒性
+    测试（Table 7：Drop / Repeat / Transfer 三类扰动下，Auto-Planning、BLEU、BLEU-rt
+    出现“不合意上升”，而 ToW 始终给出预期下降）也直观验证了 ToW 抗奖励黑客（reward
+    hacking）的特性，且代码已开源，便于第三方复现，符合严谨评测工作的标准。
+
+R3-C2  [Weaknesses]  MetaEditor 标注设计与鲁棒性样本量偏小，统计功效有限
+    MetaEditor（§5.2）中“每 9 篇同指令写作由单一标注者评估、每篇再由两人交叉验证”，
+    意味着不同指令间的可比性仅建立在单人判断上，尽管总体 Cohen's κ=0.71、Pearson
+    0.87 看似良好，但指令级偏差未被交叉覆盖。更突出的是 §6.2 鲁棒性测试仅随机抽 50
+    条样本（每模型 5 条），在 12 体裁 × 3 任务 × 10 模型的巨大组合空间下，50 条样本
+    的统计功效很弱，Table 7 中 -0.97、-1.52 等大幅变化是否显著缺乏置信区间或显著性
+    检验。建议扩大扰动测试至数百条并报告方差/显著性，否则“ToW 鲁棒”的结论偏脆。
+
+R3-C3  [Questions]  三级主节点采用“按叶子数平均”，与 leaf 层显式权重不一致，缺少消融
+    §3.3 在聚合 Score(VC)/Score(VF)/Score(VI) 时改用“基于叶子数的平均”而非像 leaf 层
+    那样用 negotiator 学习的权重，理由是兼顾 Completion 缺 format 维度。但这与全文“显式
+    建模聚合权重以消除不一致”的主线自相矛盾：为何只在最细粒度显式加权、却在主节点
+    回退到隐式平均？§5.3 的节点消融（Table 5）只验证了“保留/移除某节点”的影响，并未
+    对比“主节点也用学习权重 vs. 当前平均”的方案。建议补充该消融，并讨论主节点权重若
+    由 negotiator 生成是否会进一步改善或引入不稳定，以增强方法内部的一致性论证。
+
+**Verdict：Minor Revision**
+
+**Overall Summary：**
+从方法学角度看，本文的 Tree-of-Writing 框架概念站得住脚，且协商不一致性的量化、
+鲁棒性测试与开源实现都体现了评测工作的严谨取向，相对 WritingBench 等“指令遵循式”
+基准也确实提供了“隐性意图/专家级写作”这一补充视角。主要短板在实证严谨度：人类
+元评估的指令级覆盖不足、鲁棒性测试样本仅 50 条缺乏显著性、以及主节点聚合策略与
+leaf 层显式权重的不一致未被充分论证。这些问题均属可修复的“补实验/补消融”范畴，
+不涉及核心立论崩塌，故建议小修——在补充指令级交叉标注、扩大鲁棒性样本并报告显著
+性、以及主节点加权方案消融后，本文可达到发表水准。
+
+================================================================================
+三位审稿人 verdict 汇总
+================================================================================
+    Reviewer 1（支持/建设性）：Accept
+    Reviewer 2（质疑/挑剔）  ：Major Revision
+    Reviewer 3（中立/方法学） ：Minor Revision
+
+（注：R2 与 R1/R3 在“0.93 相关性的统计层级”与“评估模型自偏置”上存在实质分歧，
+ 建议作者优先回应 R2-C1 与 R2-C2，因其直接关系到论文核心结论的可信度。）
+================================================================================

@@ -1,0 +1,75 @@
+================================================================
+论文审稿意见（模拟标准学术审稿格式）
+================================================================
+
+【论文标题】DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence
+【作者】DeepSeek-AI（research@deepseek.com）
+【源文件名】DeepSeek-V4 Towards Highly Efficient Million-Token Context Intelligence.pdf
+【论文性质】arXiv:2606.19348v1 [cs.CL] 26 Apr 2026（Preview / Technical Report，58 页）
+【涉及子领域】高效 Transformer / 注意力机制、百万级长上下文、MoE 架构与训练系统
+
+
+================================================================
+Reviewer 1（立场：偏支持 / 建设性）
+================================================================
+
+R1-C1｜标题：面向百万级上下文的高效注意力工程突破｜类型：Strengths
+本文在长上下文效率上的核心贡献——CSA（压缩 + DSA 稀疏选择）与 HCA（更激进压缩 + 稠密注意力）的混合注意力架构——在 1M token 设定下取得了令人信服的端到端增益：相对已高度优化的 DeepSeek-V3.2，DeepSeek-V4-Pro 仅用 27% 的单 token 推理 FLOPs 与 10% 的 KV cache，Flash 版本更降至 10% / 7%（§2.3.4、Figure 1 右）。相比 MLA/DSA 仅做单点压缩，本文通过"压缩率分层 + 稀疏选择 + sliding window + attention sink"的组合，把 KV cache 压到 BF16 GQA8 基线的约 2%，工程上确实把百万 token 上下文从"理论上可行"推进到"可常态化部署"，这是该子领域近年最具实效的成果之一。
+
+R1-C2｜标题：长上下文基准上对前沿闭源模型的领先｜类型：Strengths
+在 1M 上下文的公开长上下文基准上，DeepSeek-V4-Pro-Max 表现突出：MRCR 1M 达到 83.5（MMR），显著超过 Gemini-3.1-Pro 的 76.3；CorpusQA 1M 达到 62.0，亦高于 Gemini-3.1-Pro 的 53.8（§5.3.2，Table 6）。更重要的是模型是"原生"支持 1M 上下文而非靠外推或分段拼接，配合 interleaved thinking 在长程 agent 任务中保留完整推理链（§5.1.1，Figure 7），这在长上下文实用化方向上提供了有说服力的证据，对开源生态尤其有价值。
+
+R1-C3｜标题：建议补充真实服务链路下的效率分解｜类型：Suggestions
+论文的效率结论目前以"等效 FP8 FLOPs"和 KV cache 容量为主（§2.3.4），建议补充真实服务链路指标：在 1M 上下文下的首 token 延迟（TTFT）、吞吐（tokens/s）、显存占用与 on-disk KV 复用命中率（§3.5.2），以及 CSA-only / HCA-only / 二者混合的逐项对照。这些实测能让"27% FLOPs、10% KV"的声明转化为可落地的部署收益，也便于后续工作公平比较。
+
+【Reviewer 1 Verdict】Accept
+【Overall Summary】本文以 CSA+HCA 混合注意力、mHC 残差增强与 Muon 优化为核心，在百万 token 长上下文场景取得了相对于 DeepSeek-V3.2 数量级的效率跃升，并在 MRCR/CorpusQA 1M 上超越当前最强闭源模型，开源实现与 checkpoint 也增强了可复现性。作为面向高效长上下文的子领域论文，其工程贡献与实测增益扎实且具引领性，仅需在真实服务链路效率与组件分解上做少量补充即可。整体属于该方向少见的高完成度、强影响力的系统级贡献，建议接收。
+
+
+================================================================
+Reviewer 2（立场：偏挑剔 / 质疑）
+================================================================
+
+R2-C1｜标题：缺乏组件级消融，增益难以归因｜类型：Weaknesses
+论文给出了大量端到端的整体结果（Base 对比表 Table 1、后训练 Table 6/7），但全文没有给出任何组件级消融：mHC、CSA、HCA、Muon、Hash routing、partial RoPE 各自贡献了多少？尤其 §2.3 仅笼统说采用 CSA 与 HCA 的"interleaved hybrid configuration"，却未说明二者在层间的排布规律（各占多少层、何种交替节奏、是否随深度变化）。没有这些对照，读者无法判断长上下文增益主要来自压缩率、稀疏选择还是 MoE/数据改进，论点可信度被显著削弱。
+
+R2-C2｜标题：长上下文评估覆盖过窄且关键基线缺失｜类型：Questions
+1M 上下文评测只用 MRCR 与 CorpusQA 两个基准（§5.3.1），缺少 RULER、needle-in-haystack、synthetic recall、多跳跨文档推理等更具诊断性的长上下文测试；同时 GPT-5.4"因 API 未能响应"而被整体排除（§5.3.1），使"长上下文领先闭源"的结论只建立在与 Gemini 的单方比较上。此外，模型是否真在预训练阶段见过完整 1M 上下文、还是靠 partial RoPE（仅最后 64 维）+ 位置外推获得（§2.3.3），文中未明确其训练时最大序列长度与 1M 能力的来源，存在外推而非"原生"的疑点，请澄清。
+
+R2-C3｜标题：架构复杂度高、可复现性存疑，且部分核心技巧未披露｜类型：Weaknesses
+结论 §6 自己承认"架构相对复杂""保留了许多技巧"，并首次披露 Anticipatory Routing 与 SwiGLU Clamping 对训练稳定性有效，但这两个机制在正文章节（Architecture / Training）中完全未描述，读者无法据此复现或理解稳定性原理。mHC 本身也直接引自 Xie et al. 2026，并非本文原创；而 mHC 每层需以 Sinkhorn-Knopp（t_max=20）投影到双随机矩阵流形（§2.2），这一额外开销在效率分析中未被计入，可能削弱"27% FLOPs"的净收益表述。整体更像一个工程 release 而非贡献清晰的研究论文。
+
+【Reviewer 2 Verdict】Major Revision
+【Overall Summary】本文在长上下文效率的工程指标上数字亮眼，但作为研究论文存在明显短板：缺少组件级消融导致增益无从归因，1M 评测只用两个基准且缺失关键闭源基线，部分训练稳定性机制（Anticipatory Routing、SwiGLU Clamping）仅在第 6 节一笔带过而未在正文中定义，mHC 等为借用而非原创。要在顶会级别成立，必须补充分层排布详述、受控消融、更全面的 1M 诊断基准与训练稳定性机制的完整描述，并如实披露 Sinkhorn 等额外开销。建议大修。
+
+
+================================================================
+Reviewer 3（立场：中立 / 方法学严谨）
+================================================================
+
+R3-C1｜标题：效率指标口径与比较基准需严格界定｜类型：Questions
+论文多处效率表述口径需明确：所谓"single-token inference FLOPs (measured in equivalent FP8 FLOPs)"（§2.3.4、Abstract）是否把 Lightning Indexer 的 FP4 计算、Sinkhorn 投影、RMSNorm/RoPE 等辅助运算一并计入？KV cache "≈2% of BF16 GQA8 baseline"的比较是否采用了与基线一致的精度口径（本文对 KV 采用 BF16+FP8 混合存储，§2.3.4）？此外，所有效率对比的对象都是已经高度优化的 DeepSeek-V3.2（含 MLA/DSA），与"标准 vanilla attention"对比更能凸显方法本身增益。请明确计量边界，避免把精度压缩带来的收益与架构创新带来的收益混为一谈。
+
+R3-C2｜标题：建议补充受控消融与训练稳定性证据｜类型：Suggestions
+mHC 的核心卖点是"双随机约束使谱范数 ≤1、提升深层堆叠稳定性"（§2.2），但文中只陈述结论、未给证据：建议补充 (a) 标准 HC 与 mHC 的训练 loss/梯度范数曲线对照，验证"数值不稳定"一说；(b) Sinkhorn 迭代次数（t_max）的消融，说明 20 次是否为收益拐点；(c) §4.2.3 提到缓解训练不稳定，却没有给出任何 loss spike 或稳定性对比图。同样，Muon 相对 AdamW 的收敛加速也应给出等算力下的 loss 曲线，而非仅定性描述。
+
+R3-C3｜标题：系统与基础设施贡献扎实、可复现性强｜类型：Strengths
+抛开架构争议，本文在训练/推理系统上的贡献相当扎实且对社区可直接复用：细粒度通信-计算重叠的 MegaMoE 巨核（理论 1.92×，实测 1.50–1.96×，§3.1）、基于 TileLang 的 kernel 开发生态（含 Z3 辅助的整数分析、bitwise 可复现，§3.2–3.3）、面向 Muon 的 hybrid ZeRO（§3.4.1）、以及 FP4 量化感知训练（§5.2.1）。配合开源实现与 checkpoint，这些内容为"如何低成本训练/服务超大 MoE + 高效长上下文"提供了可复现的方法学范本，是论文的重要加分项。
+
+【Reviewer 3 Verdict】Minor Revision
+【Overall Summary】本文方法学上最突出的问题是效率计量口径不够透明、且缺少对核心声明（mHC 稳定性、Muon 加速、混合注意力排布）的受控消融与可视化证据，这些属于可通过补充实验解决的中等规模修订，而非根本缺陷。与此同时，其在系统/基础设施层面的贡献（MegaMoE、TileLang、确定性 kernel、FP4 QAT）扎实、开源且可复现，显著提升了论文的工具价值。建议小修：澄清指标口径、补齐关键消融与稳定性证据、明示混合注意力层间排布即可。
+
+
+================================================================
+三位审稿人 Verdict 汇总
+================================================================
+Reviewer 1（支持/建设性）：Accept
+Reviewer 2（挑剔/质疑）：Major Revision
+Reviewer 3（中立/方法学严谨）：Minor Revision
+
+【共识性建议】无论 verdict 差异如何，三位审稿人均认为以下补充能普遍提升论文质量：
+(1) 给出 CSA/HCA 在层间的确切排布与交替规律；
+(2) 提供组件级消融（mHC / CSA / HCA / Muon 各自贡献）；
+(3) 扩展 1M 上下文诊断基准（RULER、needle、synthetic recall 等）并尽力补齐 GPT-5.4 等缺失基线；
+(4) 在效率声明中透明拆分精度压缩收益与架构创新收益，并计入 Sinkhorn 等辅助开销；
+(5) 在正文中完整描述 Anticipatory Routing、SwiGLU Clamping 等训练稳定性机制。
