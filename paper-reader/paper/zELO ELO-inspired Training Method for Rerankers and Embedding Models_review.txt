@@ -1,0 +1,232 @@
+================================================================================
+                         论文审稿意见（Peer Review）
+================================================================================
+
+论文标题：
+    zELO: ELO-inspired Training Method for Rerankers and Embedding Models
+
+作者：
+    Nicholas Pipitone, Ghita Houir Alami, Advaith Avadhanam, Anton Kaminskyi,
+    Ashley Khoo（ZeroEntropy 团队，工业界技术报告）
+    预印本：arXiv:2509.12541v1 [cs.AI] 16 Sep 2025，全文 13 页（含附录）
+    模型：huggingface.co/zeroentropy/zerank-1 与 zerank-1-small
+    标注工具：github.com/zeroentropy-ai/zbench
+
+源文件名：
+    zELO ELO-inspired Training Method for Rerankers and Embedding Models.pdf
+
+子领域：
+    信息检索（IR）/ Reranker 训练 / LLM 合成数据与蒸馏 / LLM-as-a-judge
+
+说明：以下意见由三位立场不同的资深审稿人给出，每位恰好 3 条意见，编号
+R1-C1…R3-C3，意见类型取自 {Strengths / Weaknesses / Questions / Suggestions}。
+评分附 NeurIPS/ICLR 风格 Score（1–10）与 Confidence（1–5）。评审基于 arXiv
+v1 全文（含附录与提示词）；新颖性判断经 2024–2025 相关文献检索核查。
+
+论文概要（供核对理解）：作者提出 zELO 训练管线——(1) 混合检索（Qwen3-
+Embedding-4B + BM25，RRF 融合）取 top-100 候选；(2) 3 个前沿 LLM 组成集成
+裁判，对随机文档对输出 [-1,1] 偏好并截断为 {-1,0,1}；(3) 用 BCE 将成对裁判
+能力蒸馏进 pairwise reranker；(4) 通过"k/2 个随机环并集"构造 k-正则稀疏比
+较图（k=8，400 次推理 ≈ 全矩阵 0.4%），以 Thurstone(erf) 模型极大似然拟合
+每文档 Elo 分；(5) 以 MSE 将 Elo 分蒸馏进 pointwise reranker（Qwen3-4B →
+zerank-1；Qwen3-1.7B → zerank-1-small）；(6) 用人工标注最高分文档的失败案
+例做二轮增强。训练数据为 11.2 万公开查询 × 每查询 100 文档，端到端耗费
+<10,000 H100 小时。结果声称在金融、法律、医学、代码、STEM 等域全面超越
+Cohere rerank-v3.5、Voyage rerank-2、Salesforce Llama-rank-v1 等商用模型。
+
+================================================================================
+Reviewer 1（应用与系统视角 / 偏支持立场）
+================================================================================
+
+R1-C1  [Strengths]  端到端工业级管线加开源强模型，实践价值直接且可验证
+    论文交付的不只是方法，而是可立即采用的产物：zerank-1 / zerank-1-small
+    开源权重（small 为 Apache 2.0），训练仅用 11.2 万查询与 <10,000 H100 小
+    时（Abstract、§2.2），证明该管线在工业预算内可复制。效果证据覆盖面广：
+    Table 2 显示 zerank-1 在六个公开域全部领先（如 Finance 0.894 vs Cohere
+    rerank-v3.5 的 0.824；STEM 0.694 vs 0.510）；Table 3 的私有客户数据上优
+    势进一步扩大（Healthcare 0.898 vs Cohere 0.706）；Table 1 显示 zerank-1
+    在 NDCG@10 达 0.7683（Cohere 3.5 为 0.7091、Jina m0 为 0.7279）的同时，
+    12KB 文档延迟 149.7±53.1ms 反而快于 Cohere 的 171.5±106.8ms。"4B 开源
+    权重 + 商用级延迟 + 多域 SOTA + 附带开源标注工具 zbench"对检索从业者
+    是净贡献，Figure 12 还验证了在 BM25 / 混合检索两种一阶段之上均有稳定
+    增益，实用覆盖面完整。
+
+R1-C2  [Strengths]  随机环并集的稀疏采样设计优雅，效率贡献有扎实实证
+    §4.2.4 是全文技术含量最高的部分：以 O(n) 次成对推理估计 n 个文档的
+    Elo，需要同时满足连通性、最小度、低直径三个图性质（Fig 2–4 逐一图
+    示论证），作者给出"并集 k/2 个随机哈密顿环构造 k-正则图"的方案（Fig
+    5–7），直径界正确引用 Bollobás (2001, Ch. 10.3)。实证侧，Figure 9 对比
+    四种采样策略下"稀疏估计 Elo vs 稠密真值 Elo"的收敛，Figure 10 展示随机
+    采样的收敛轨迹，最终仅用 400 次推理（全矩阵的 0.4%）即可稳定估计 100
+    文档的 Elo（§5.4）。该设计把昂贵的 LLM 集成标注成本压到可量产水平，
+    且启发式（方差 ∝ 图距离、∝ 1/度）表述清晰、可被后续工作直接沿用——
+    这是超出"又一篇蒸馏论文"的实质性效率贡献。
+
+R1-C3  [Suggestions]  评测呈现严重不完整：基准未命名、占位符 caption、
+                       Recall 与统计量缺失
+    论文最强的卖点恰恰呈现得最草率：(a) Table 2/3 只给领域名（Code/
+    Finance/Legal/...），不给出具体 benchmark 名称与样本量，读者无法核验
+    或复现；(b) 第 11 页 Figure 11 的图题竟是占位符 "Figure 11. Caption"，
+    而摘要与 §2.3 声称击败 Gemini Flash 2.0、GPT-4o-mini、GPT-5-mini/nano
+    的关键对比证据疑似就在该图——目前正文中只有 gemini-reranker 的文字性
+    结论（§6 末段），GPT 系列对比数字全文未见；(c) 摘要声称 "on both
+    NDCG@10 and Recall" 双指标领先，但全文没有出现任何 Recall 数字；(d)
+    Table 1 的 NDCG@10 未说明聚合口径（哪些数据集、如何平均）。建议逐表
+    补齐基准名、口径、修复 Figure 11、补 Recall@k 与多种子方差，否则"超越
+    闭源模型"这一核心主张处于不可核验状态。
+
+**Verdict：Weak Accept（弱接收）**
+**Score：6/10　Confidence：4/5**
+
+**Overall Summary：**
+作为工业界技术报告，本文的交付物（开源模型、可量产的稀疏标注管线、延迟-
+精度兼顾的实测）对 IR 社区有明确实用价值，六域公开数据与四类私有数据上的
+领先幅度也足够大、不像测量噪声。但作为可评审的学术论文，其评测呈现的完整
+度（未命名基准、占位图题、缺失的 Recall 与方差）远低于发表标准。若作者补
+齐 R1-C3 所列各项并增加关键消融（见 R3-C2），本文可稳定站上接收线；当前
+状态为弱接收、以工程产物价值为主要依据。
+
+================================================================================
+Reviewer 2（新颖性与论证严谨性 / 偏严格立场）
+================================================================================
+
+R2-C1  [Weaknesses]  核心动机"Laffer curve"无任何量化证据，且作者自行承认
+    §3.2 的立论——难负例挖掘存在性能天花板、越智能的矿工反而越伤害学生模
+    型、因此"Hard negative mining is fundamentally flawed"——全部建立在
+    "Experimentally, we found…"的轶事式叙述上；Figure 1 的图题更是明言：
+    "We did not collect sufficient data with miner intelligence as the only
+    independent variable, so we leave such data collection to future
+    research."，即支撑全文动机的受控实验并不存在。逻辑上该论证也有漏洞：
+    观测到"难负例平均比人工正例更相关"（§3.2 第二段）说明的是标签噪声问
+    题（人工正例不可靠），而非难负例挖掘范式本身有缺陷——若标签准确，难
+    负例仍是高信息量信号。与之对应，全文缺少最关键的对照实验：同数据、同
+    基座模型下，zELO（对 Elo 分做 MSE）与 InfoNCE（带难负例）的直接比较。
+    在动机未证实、对照实验缺失的情况下，对既有 SOTA 训练范式下"fundament-
+    ally flawed / fundamentally capped"的定性属于 overclaim，应降格为假设。
+
+R2-C2  [Weaknesses]  新颖性定位失实：无相关工作章节，直接相关先行工作零引用
+    方法主干是三件成熟技术的组合：(i) LLM 集成成对裁判（LLM-as-a-judge），
+    (ii) Bradley-Terry/Thurstone（即 Elo）聚合成对偏好为绝对分——这正是
+    Chatbot Arena / MT-Bench 一脉的标准做法，(iii) 以合成标签蒸馏 pointwise
+    reranker。经检索核查 2024–2025 文献：以 LLM 合成相关性标签训练 reranker
+    的管线已有 InPars / InPars-v2、Promptagator、TWOLAR (2024)、DEAR
+    (EMNLP 2025 Findings)、PairDistill 等大量先行工作；多裁判偏好用 BT 聚
+    合亦有 NAACL 2025 Findings 等专门研究。上述工作本文一篇未引，全文没有
+    Related Work 章节，参考文献仅 13 条（其中 4 条为博客/产品页/技术报告），
+    引用的 mxbai-rerank-v2 博客 [6] 也未在实验中对比。真正属于本文的新组件
+    只有"随机环并集稀疏采样 + Thurstone-erf 选型 + 失败案例二轮增强"等工
+    程层面的贡献。以"a novel training methodology"（Abstract）自我定位与实
+    际增量不匹配；建议增加相关工作章节，并把新颖性声明收窄到稀疏采样与蒸
+    馏目标设计上。
+
+R2-C3  [Weaknesses]  术语误用、内部矛盾与训练侧不可复现
+    (a) §5.6 标题自称 "RLHF"，但内容无奖励模型、无策略优化，实为失败案例
+    驱动的补充蒸馏数据 + 重训——术语误用；同段先写 "improve on the
+    pointwise model's performance"，标题却是 "Improving the Pairwise
+    Reranker"，pointwise/pairwise 行文混用。(b) 直接矛盾：§6 称 "the zELO
+    training method does not use any human annotations"、摘要称 "unannotated
+    queries and documents"，但 §5.6 明确使用每查询人工最高分文档 d_human、
+    人工标注者数量的启发式与逐数据集手工阈值 t 参与第二轮训练——最终模型
+    并非纯无监督产物。(c) 训练侧关键细节缺失：集成裁判 |P|=3 的三个前沿
+    LLM 全文未命名（§5.3）；阈值 t "manually set"（§5.6）未给出；训练超参
+    （学习率、轮数、批大小、序列长度）与 11.2 万查询的具体数据集构成均未
+    报告——第三方无法复现训练。(d) 许可口径前后不一：§2.2 称 zerank-1-
+    small 为 Apache 2.0、zerank-1 "available for license"，§7 结论却称两模
+    型权重 "for non-commercial uses"。这些不是排版问题，而是影响主张可信
+    度与可复现性的实质缺陷。
+
+**Verdict：Reject**
+**Score：4/10　Confidence：4/5**
+
+**Overall Summary：**
+本文的工程产物无疑有价值（这一点与 R1 不冲突），但作为研究论文，其"动机
+—主张—证据"链条在三处断裂：动机（Laffer curve）无数据且作者自认（R2-C1）；
+新颖性声明回避了整条 LLM 合成标签训练 reranker 的先行工作线（R2-C2）；
+"无人工标注/RLHF/开源"等关键表述与正文自相矛盾、训练细节不可复现（R2-C3）。
+叠加评测基准未命名与占位图题（R1-C3、R3-C3），当前稿件不满足学术发表的
+最低证据标准。若作者补做动机对照实验（zELO vs InfoNCE 同条件对比）、如实
+定位相关工作、清理矛盾表述并公开训练配置，这一管线完全可能写成一篇扎实
+的论文；但那是改稿后的另一篇稿件。
+
+================================================================================
+Reviewer 3（中立 / 方法学严谨立场）
+================================================================================
+
+R3-C1  [Strengths]  统计建模与偏差控制的细节体现了方法学素养
+    §4.2 对 BT/Thurstone 的极大似然拟合正确引用 Zermelo (1929) 的唯一极小
+    性，并配以发散的衰减步长（ηt = t^-0.125）保证梯度下降收敛；§4.2.2 用
+    中心极限定理为"Thurstone-erf 替代 BT-logistic"提供先验论证（文档比较
+    噪声来自多个源 → 高斯而非 Gumbel），选型有据。偏差控制是 LLM 裁判文
+    献中的最佳实践：随机交换 A/B 文档位置并取负分（§5.3、附录 9.1）、对
+    每个模型分别做 prompt 工程使输出分布近似均匀、集成平均前先截断到
+    {-1,0,1}；§5.4 在图采样中同样保留"一半时间交换 i,j"的位置去偏。图性
+    质论证（连通性/最小度/直径，Fig 2–7）配合 Bollobás 直径界，使稀疏采样
+    方案有理论依据而非纯经验调参。整体统计叙述远比一般工业报告严谨。
+
+R3-C2  [Weaknesses]  关键设计选择全部无消融，统计显著性系统性缺失
+    (a) Thurstone 优于 BT 仅凭一句 "we observe that this adjustment makes
+    a better fit to the observed data"（§4.2.2），无拟合优度数字、无下游
+    对比；(b) 集成规模 |P|=3、单裁判 vs 集成、BCE 蒸馏损失选型均无消融；
+    (c) §5.4 的采样方法比较只报告"稀疏 Elo vs 稠密 Elo 的 MSE"（Fig 9），
+    未验证误差向下游 NDCG@10 的传导——拟合 Elo 更近未必训出更好的 pointwise
+    学生；且正文称随机采样约 1% 比例即让交叉熵趋零，Figure 10 图题却写
+    "convergence observed around 1.2k/10k"（12%），两处口径矛盾；(d)
+    Table 2/3 全部为单值，无多种子方差、无显著性检验，Conversational
+    0.596 vs Cohere 0.571（Table 2）这类差距无法判断是否超出随机波动；
+    (e) Table 1 延迟对比未说明硬件、批大小与输入分布，"4B 模型快于 Cohere
+    3.5"的结论无法解读；(f) Figure 8 的收敛研究（BioASQ、Llama 8B/70B 蒸
+    馏、93% vs 75–81%）来自"早期研究运行"且非最终模型配置，作为方法通用
+    性证据的效力有限。上述每一条单独都可修复，但合起来意味着：论文的每个
+    设计选择都依赖作者直觉而非受控证据。
+
+R3-C3  [Questions]  待作者澄清的六个问题（答案将实质改变评审判断）
+    1) 标题为 "...for Rerankers and Embedding Models"，但全文没有任何训练
+       embedding model 的内容（embedding 仅作为一阶段检索器出现）——为何
+       如此命名？
+    2) 集成 P 的三个前沿 LLM 具体是哪些模型？zerank-1 相对教师集成的裁判
+       一致率是多少？按 §3.2 自己的论证，教师精度是学生性能的天花板，该
+       上限应被量化。
+    3) Table 2/3 每个任务对应哪些具体 benchmark？Figure 11 的内容是什么？
+       摘要/§2.3 声称的 GPT-4o-mini、GPT-5-mini/nano 对比数字在哪里？
+    4) §5.6 使用的人工标注来自哪里？11.2 万"公开查询"所属的 HuggingFace
+       数据集中哪些带人工相关性标注、与评测基准是否重叠？这同时关系到
+       "unsupervised/unannotated"主张（Abstract、§6）与训练-评测污染两个
+       问题。
+    5) 训练查询覆盖 finance/law/medicine/code/STEM，评测基准同样是这五个
+       域——是否做过训练数据与评测集的重叠/污染检查？Table 3 私有数据领
+       先可部分打消疑虑，但公开基准上的数字需要去重声明支撑。
+    6) §2.4 称 "ensembles of LLMs via zELO generate higher quality data
+       than an equivalent number of human annotators on average"——该结论
+       的实验设置、样本量与数字是什么？全文未见对应证据。
+
+**Verdict：Major Revision**
+**Score：5/10　Confidence：3/5**
+
+**Overall Summary：**
+从方法学看，本文的统计聚合框架（Zermelo 收敛性、Thurstone 选型论证、位置
+偏差控制、图采样三性质）构建得干净且大部分有理论依据，稀疏环采样是可被社
+区复用的实质贡献；实证结果的领先幅度也足够大。但"每个设计选择都无消融 +
+全部结果无显著性 + 若干主张（Recall、GPT 系对比、优于人工标注）无对应数
+据"使得论文当前更接近配置良好的系统报告而非可检验的研究贡献。所列问题均
+属"补实验、补数字、清理表述"的可修复范畴，不涉及方法本身崩塌，故给大修：
+补齐消融（Thurstone vs BT、|P|、采样方法的下游传导）、补统计量、回答六个
+澄清问题后，可达发表水准。Confidence 3：本人熟悉 IR 与 LLM 蒸馏文献，但
+无法验证私有数据结果，且未逐行核对图论引理的原始文献。
+
+================================================================================
+三位审稿人 verdict 汇总
+================================================================================
+    Reviewer 1（应用/系统，支持）：Weak Accept（Score 6/10, Conf 4/5）
+    Reviewer 2（新颖性/严谨，严格）：Reject（Score 4/10, Conf 4/5）
+    Reviewer 3（方法学，中立）  ：Major Revision（Score 5/10, Conf 3/5）
+
+    综合判定：Borderline —— 以学术会议/期刊标准处于接收线之下
+    （均分 5.0，倾向 Major Revision / Reject）；以工业技术报告标准则
+    产物价值明确。
+
+（注：三位审稿人的分歧集中在"工程产物的价值能否补偿论证缺口"。无分歧的
+ 共识问题有三，建议作者优先回应：(1) 动机实验缺失且 InfoNCE 对照缺席
+ （R2-C1）；(2) 评测不可核验——基准未命名、Figure 11 占位符、Recall 与
+ GPT 系对比数字缺失（R1-C3 / R3-C3）；(3) "无人工标注"与 §5.6 的矛盾
+ 及训练细节不可复现（R2-C3）。三者均属可在改稿中实质性修复的问题。）
+================================================================================
