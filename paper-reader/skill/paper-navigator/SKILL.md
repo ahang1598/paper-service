@@ -1,7 +1,7 @@
 ---
 name: paper-navigator
 description: 通过检索学术论文及研究文献，来回答专业领域的深度问题与文献诉求。【命中场景】（满足以下任一即可触发）：1.明确文献诉求：有论文/综述/原始证据/奠基作/SOTA/演进脉络/实验数据等意图时，明确需要寻找学术文献来源。2.深度机制与原理探讨：针对具体算法、模型、参数、数学推导、实验设计等，探究其底层实现或优化机制。3.专业对比与前沿进展：对比复杂技术/架构的优劣、局限性，或询问垂直领域（理工/人文/社科等）的最新学术突破与成因。4.需要专业领域知识的。不适用：基础概念科普、通识百科问答
-version: 1.6.5
+version: 1.6.6
 category: 工具类
 scope: 对话内可用
 ---
@@ -12,7 +12,7 @@ scope: 对话内可用
 
 先读懂"查询背后的真问题": 用户表面搜一个词,实际可能要原始工作、SOTA、方法对比、可复现实验、定量证据或脉络梳理。每轮检索前都要明确: 核心对象是什么、缺口是什么、需要哪类证据、是否有时序意图。
 
-固定执行 **4 轮请求**: 第 1 轮网页搜索,后 3 轮论文搜索。每轮只调用一次 `WebSearch`,每次 `queries` 中**并行搜索 4 个关键词**。不得少于或多于 4 条;缺口不足时用上位词、同义术语、代表方法、验证词补足。
+固定执行 **3 轮请求**: 第 1 轮网页搜索,后 2 轮论文搜索。每轮只调用一次 `WebSearch`,每次 `queries` 中**并行搜索 4 个关键词**。不得少于或多于 4 条;缺口不足时用上位词、同义术语、代表方法、验证词补足。
 
 ---
 
@@ -22,7 +22,7 @@ scope: 对话内可用
 
 - `queries`: 4 条查询词数组,承载并行检索。
 - 网页模式(R1): 只允许 `queries`,**不得带 `additional_params`**。
-- 论文模式(R2/R3/R4): 必须带 `additional_params`,固定包含 `"domain":"paper"`、`"search_agent":"creative_qa_agent"`、`"agent_size":7`、`"lang"`;仅在规则触发时添加 `filter_by.pb_time_start`/`pb_time_end`。
+- 论文模式(R2/R3): 必须带 `additional_params`,固定包含 `"domain":"paper"`、`"search_agent":"creative_qa_agent"`、`"agent_size":7`、`"lang"`;仅在规则触发时添加 `filter_by.pb_time_start`/`pb_time_end`。
 
 ## R1 网页模式
 
@@ -32,7 +32,7 @@ scope: 对话内可用
 {"queries":["transformer architecture overview","transformer architecture explained","transformer architecture history","transformer architecture introduction"]}
 ```
 
-## R2/R3/R4 论文模式
+## R2/R3 论文模式
 
 默认不加时间过滤:
 
@@ -64,7 +64,7 @@ scope: 对话内可用
 
 ---
 
-# 四轮执行流程
+# 三轮执行流程
 
 ## Step 1: 解析意图
 
@@ -78,6 +78,7 @@ scope: 对话内可用
 | 全貌综述 | 明确要综述/分类 | 上位概念 + survey/review/taxonomy |
 | 实证证据 | 要实验/benchmark | 实体名 + 属性词 |
 | 原始工作 | 要始作俑者/来源 | 裸实体名,不加 paper/original |
+| 标题定位 | 用户给出论文标题 | 整条标题放入一个 query,不受词数限制 |
 | 方法对比 | A 与 B 差异 | A、B、上位领域分别搜 |
 | 多源印证 | 单篇支撑不足 | 换术语、换团队、换 benchmark |
 | 时效/溯源 | 要 SOTA 或奠基 | 依据规则加 `pb_time_*` |
@@ -96,7 +97,7 @@ R1 固定 4 条模板化网页 query:
 | 方法对比 | `{A} {B} comparison overview`; `{A} explained`; `{B} explained`; `{upper_topic} overview` |
 | benchmark/实证 | `{core_term} benchmark overview`; `{core_term} evaluation`; `{core_term} overview`; `{upper_topic} benchmark` |
 
-R1 后形成 `R1_context`: `core_term`、`canonical_terms`、`consensus_terms`、`related_terms`、`temporal_intent`、`confidence`。采纳规则: 与用户核心对象高度一致、命中规范名称,或至少 2 个不同网页结果共同出现;单网页偶发词只作为 R3/R4 候选补盲。
+R1 后形成 `R1_context`: `core_term`、`canonical_terms`、`consensus_terms`、`related_terms`、`temporal_intent`、`confidence`。采纳规则: 与用户核心对象高度一致、命中规范名称,或至少 2 个不同网页结果共同出现;单网页偶发词只作为 R3 候选补盲。
 
 ## Step 3: R2 论文广度检索
 
@@ -108,7 +109,7 @@ R2 进入论文模式,必须带:
 
 R2 生成 4 条裸学术 query,主轴由用户核心对象 + 规则化模板/canonical mapping 决定,R1 只提供高置信补充。规则:
 
-- 3-6 个词优先;英文科研主题用英文学术术语。
+- 3-6 个词优先;英文科研主题用英文学术术语;用户给论文标题时,整条标题作一条 query,不受词数限制。
 - 用 `mechanism`、`benchmark`、`survey` 等学术词,不要用 `how it works`。
 - 不加 `paper`、`pdf`、`arxiv`、`原版` 等形式词。
 - 对比/多属性必须拆开,不足 4 条时补上位领域或代表方法。
@@ -121,26 +122,19 @@ R2 生成 4 条裸学术 query,主轴由用户核心对象 + 规则化模板/can
 - "LoRA 与 Adapter 差异" → `["LoRA low rank adaptation","adapter parameter efficient fine-tuning","parameter efficient fine-tuning survey","fine tuning benchmark"]`
 - "大模型对齐技术" → `["large language model alignment survey","RLHF reinforcement learning human feedback","direct preference optimization DPO","constitutional AI alignment"]`
 
-## Step 4: R3 定向深化
+## Step 4: R3 定向深化与收口
 
-R3 仍是论文模式,仍固定 4 条 query,仍必须在 `additional_params` 中带 `"agent_size":7`。R3 根据 R2 审计结果补缺:
+R3 是最后一轮论文搜索,仍是论文模式,仍固定 4 条 query,仍必须在 `additional_params` 中带 `"agent_size":7`。R3 根据 R2 审计结果补缺,并承担收口职责:
 
 - 若奠基作被近期论文淹没: 设 `pb_time_end`,搜原始机制/早期术语。
 - 若用户要 SOTA 或 R2 分布偏旧: 设 `pb_time_start`,搜近 2 年进展。
 - 若结论单薄: 换同义术语、不同团队、不同 benchmark 做多源印证。
 - 若对比不完整: 分别补 A、B 与上位综述。
-- 若出现矛盾: 搜验证性 query,优先权威 venue、高被引、直接实验。
-
-## Step 5: R4 论文收口
-
-R4 是最后一轮论文搜索,仍固定 4 条 query,仍必须在 `additional_params` 中带 `"agent_size":7`。只补 R3 后仍未解决的关键缺口:
-
-- 补遗漏的代表作、强基线或反例。
-- 对冲突结论做多源验证。
-- 对用户问题里的未覆盖子方向做最后补盲。
+- 若出现矛盾: 搜验证性 query,优先权威 venue、高被引、直接实验,做多源验证。
+- 补遗漏的代表作、强基线或反例,对用户问题里的未覆盖子方向做最后补盲。
 - 若强时效词触发,继续保持近 2 年过滤,不得扩到 3-4 年。
 
-R4 后默认停止。仅当仍缺原始论文、关键证据、强反例、核心分支、直接 benchmark/临床/政策证据时可补 R5;R5 仍是论文模式,1 次 `WebSearch`,4 条 query,同样 `domain:"paper"`。若评测或用户要求固定 4 轮,不得补 R5;仍不足则明示缺口。
+R3 后默认停止。仅当仍缺原始论文、关键证据、强反例、核心分支、直接 benchmark/临床/政策证据时可补 R4;R4 仍是论文模式,1 次 `WebSearch`,4 条 query,同样 `domain:"paper"`。若评测或用户要求固定 3 轮,不得补 R4;仍不足则明示缺口。
 
 ---
 
@@ -152,7 +146,7 @@ R4 后默认停止。仅当仍缺原始论文、关键证据、强反例、核�
 2. 相关性与时间硬筛: abstract 不直接回答缺口的丢弃;若用户给时间窗或强时效词,再按 `WebpageTime` 硬筛,越窗论文只能作必要背景/奠基例外并明示。
 3. 年代分布: 按 `WebpageTime` 粗统年份,如 `2024×6,2023×3,2020×1`。
 4. 角色与成熟度: 标明奠基作/SOTA/基线/反例/综述及证据型: 综述/实证/RCT/meta/政策/理论/案例/preprint/benchmark/真实部署。最新/SOTA 题可用新论文、arXiv、低引用进主线,但说明边界,不写成共识。
-5. 缺口复盘: 对照用户问题,决定 R3/R4 搜什么。
+5. 缺口复盘: 对照用户问题,决定 R3 搜什么。
 
 时间过滤规则:
 
@@ -173,7 +167,7 @@ R4 后默认停止。仅当仍缺原始论文、关键证据、强反例、核�
 
 最终回答必须交付结构化知识,不暴露搜索过程。简洁指令只约束语气,不得删证据、不得丢 `[序号]`（除了表格场景）。
 
-最终答案只放可读结论。输出前清除过程词: `R1/R2/R3/R4/R5`、`WebSearch`、`query`、`返回条数`、`缺口复盘`、`结果审计`、`四轮检索完成`、`R4 后停止`;除非用户明确要求 trace。
+最终答案只放可读结论。输出前清除过程词: `R1/R2/R3/R4`、`WebSearch`、`query`、`返回条数`、`缺口复盘`、`结果审计`、`三轮检索完成`、`R3 后停止`;除非用户明确要求 trace。
 
 ## 输出形态选择原则
 
@@ -257,8 +251,4 @@ R4 后默认停止。仅当仍缺原始论文、关键证据、强反例、核�
 ```json
 {"queries":["transformer attention mechanism","self attention sequence transduction","neural machine translation attention","attention based encoder decoder"],"additional_params":{"domain":"paper","search_agent":"creative_qa_agent","agent_size":7,"lang":"en","filter_by":{"pb_time_end":1577836800}}}
 ```
-4. R4 论文模式(补后续主要改进):
-```json
-{"queries":["efficient transformer survey","long sequence transformer","flash attention GPU","paged attention serving"],"additional_params":{"domain":"paper","search_agent":"creative_qa_agent","agent_size":7,"lang":"en"}}
-```
-R4 后默认停止。若近期硬件或服务优化证据仍不足,最终回答直说不足;确需 R5 时先说明关键缺口,R5 仍按论文模式 4 条 query 执行
+R3 后默认停止。若"后续主要改进"证据仍不足,最终回答直说不足;确需 R4 时先说明关键缺口,R4 仍按论文模式 4 条 query 执行
